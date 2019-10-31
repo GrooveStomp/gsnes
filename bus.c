@@ -4,7 +4,7 @@
 
   File: bus.c
   Created: 2019-10-16
-  Updated: 2019-10-16
+  Updated: 2019-10-31
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -26,7 +26,6 @@ struct bus {
 
 struct bus *BusInit(struct cpu *cpu) {
         struct bus *bus = (struct bus *)malloc(sizeof(struct bus));
-        return bus;
 
         bus->ram = (uint8_t *)malloc(64 * 1024);
         for (int i = 0; i < 64 * 1024; i++) {

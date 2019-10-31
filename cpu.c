@@ -178,7 +178,7 @@ void Clock(struct cpu *cpu) {
         cpu->cycles--;
 }
 
-void Reset(struct cpu *cpu) {
+void CpuReset(struct cpu *cpu) {
         cpu->a = 0;
         cpu->x = 0;
         cpu->y = 0;
@@ -242,6 +242,7 @@ void Nmi(struct cpu *cpu) {
 
 
 //-- Addressing Modes ----------------------------------------------------------
+
 
 //! \brief Add with Carry
 //!
@@ -1385,6 +1386,7 @@ uint8_t XXX(struct cpu *cpu) {
 
 //-- Helper Functions ----------------------------------------------------------
 
+
 //! \brief convert number to hexadecimal string
 //!
 //! \param[in] n number to convert to hex
@@ -1399,12 +1401,9 @@ void ToHexString(uint32_t n, uint8_t d, char *buf, uint8_t size) {
         for (int i = d - 1; i >= 0; i--, n >>= 4) {
                 buf[i] = "0123456789ABCDEF"[n & 0xF];
         }
-}
 
-struct debug_instruction_map {
-        struct debug_instruction **map;
-        int count;
-};
+        buf[d] = '\0';
+}
 
 void DebugInstructionMapDeinit(struct debug_instruction_map *map) {
         if (NULL == map) {
@@ -1417,12 +1416,6 @@ void DebugInstructionMapDeinit(struct debug_instruction_map *map) {
 
         free(map);
 }
-
-struct debug_instruction {
-        uint16_t address;
-        char *text;
-        int text_length;
-};
 
 struct debug_instruction *DebugInstructionInit(uint16_t address, char *string, int length) {
         struct debug_instruction *self = (struct debug_instruction *)malloc(sizeof(struct debug_instruction));
@@ -1443,7 +1436,7 @@ void DebugInstructionDeinit(struct debug_instruction *self) {
         free(self);
 }
 
-struct debug_instruction_map *Disassemble(struct cpu *cpu, uint16_t start, uint16_t stop) {
+struct debug_instruction_map *CpuDisassemble(struct cpu *cpu, uint16_t start, uint16_t stop) {
         int addr = start;
         uint8_t value = 0x00;
         uint8_t lo = 0x00;
@@ -1454,8 +1447,8 @@ struct debug_instruction_map *Disassemble(struct cpu *cpu, uint16_t start, uint1
         debug_map->count = stop - start;
         debug_map->map = (struct debug_instruction **)malloc(sizeof(struct debug_instruction *) * debug_map->count);
 
-        char text[256];
-        char text_cpy[256];
+        char text[256] = { 0 };
+        char text_cpy[256] = { 0 };
         uint8_t hex_buf_len = 5; // Space for terminating null.
         char hex_buf[hex_buf_len];
         uint16_t text_len = hex_buf_len; // Size adjusts as we construct string below.
@@ -1465,21 +1458,22 @@ struct debug_instruction_map *Disassemble(struct cpu *cpu, uint16_t start, uint1
 
         int i = 0;
         while (addr <= stop) {
+                text_len = hex_buf_len; // Size adjusts as we construct string below.
                 line_addr = addr;
                 struct instruction instruction;
 
                 // Prefix instruction with address.
                 ToHexString(addr, 4, hex_buf, hex_buf_len);
-                text_len++;
+                text_len += 3; // Adding $, <colon> and <space>
                 snprintf(text, text_len, "$%s: ", hex_buf);
-                strncpy(text_cpy, text, strnlen(text, text_len));
+                strncpy(text_cpy, text, strnlen(text, text_len) + 1);
 
                 // Get the readable name of the instruction.
                 uint8_t opcode = BusRead(cpu->bus, addr);
                 instruction = instruction_map[opcode];
                 addr++;
                 text_len += 4; // instruction.name is 3 chars, plus an extra space.
-                snprintf(text, text_len, "%s%s ", text_cpy, instruction.name);
+                snprintf(text, text_len, "%s%s ", text_cpy, instruction.name); //<--
                 strncpy(text_cpy, text, strnlen(text, text_len));
 
                 if (IMP == instruction.address) {
@@ -1551,7 +1545,10 @@ struct debug_instruction_map *Disassemble(struct cpu *cpu, uint16_t start, uint1
                         value = BusRead(cpu->bus, addr);
                         addr++;
                         ToHexString(value, 2, hex_buf, hex_buf_len);
-                        // TODO... sInst += "$" + hex(value, 2) + " [$" + hex(addr + value, hex_buf_len) + "] {REL}";
+
+                        char hex_buf2[5];
+                        ToHexString(addr + value, 4, hex_buf2, hex_buf_len);
+                        snprintf(text, 256, "%s$%s [$%s] {REL}", text_cpy, hex_buf, hex_buf2);
                 }
 
                 debug_map->map[i] = DebugInstructionInit(line_addr, text, strnlen(text, 256));
