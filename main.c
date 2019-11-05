@@ -70,12 +70,12 @@ int main(int argc, char **argv) {
         struct debug_instruction_map *map = CpuDisassemble(cpu, 0x0000, 0x000F);
 
         for (int i = 0; i < map->count; i++) {
-                printf("map{%p}", map);
+                printf("map{%p}", (void *)map);
                 if (NULL != map) {
-                        printf("->map{%p}", map->map);
+                        printf("->map{%p}", (void *)map->map);
 
                         if (NULL != map->map) {
-                                printf("[i]{%p}", map->map[i]);
+                                printf("[i]{%p}", (void *)map->map[i]);
 
                                 if (NULL != map->map[i]) {
                                         printf("->text{%s}", map->map[i]->text);

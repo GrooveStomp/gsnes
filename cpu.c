@@ -1,10 +1,11 @@
+
 /******************************************************************************
   GrooveStomp's NES Emulator
   Copyright (c) 2019 Aaron Oman (GrooveStomp)
 
   File: cpu.c
   Created: 2019-10-16
-  Updated: 2019-10-31
+  Updated: 2019-11-05
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -95,6 +96,7 @@ struct cpu {
         uint16_t addr_rel;
         uint8_t opcode; //!< Opcode for the currently executing instruction
         uint8_t cycles; //!< How many cycles the current instruction takes
+        uint32_t tick_count;
 };
 
 enum status_flags {
@@ -124,6 +126,7 @@ struct cpu *CpuInit() {
         cpu->addr_rel = 0x00;
         cpu->opcode = 0x00;
         cpu->cycles = 0;
+        cpu->tick_count = 0;
 }
 
 void CpuDeinit(struct cpu *cpu) {
@@ -136,18 +139,18 @@ void CpuConnectBus(struct cpu *cpu, struct bus *bus) {
         cpu->bus = bus;
 }
 
-uint8_t GetFlag(struct cpu *cpu, enum status_flags f) {
+static uint8_t GetFlag(struct cpu *cpu, enum status_flags f) {
         return ((cpu->status & f) > 0) ? 1 : 0;
 }
 
-void SetFlag(struct cpu *cpu, enum status_flags f, bool v) {
+static void SetFlag(struct cpu *cpu, enum status_flags f, bool v) {
         if (v)
                 cpu->status |= f;
         else
                 cpu->status &= ~f;
 }
 
-uint8_t Fetch(struct cpu* cpu) {
+static uint8_t Fetch(struct cpu* cpu) {
         if (!(instruction_map[cpu->opcode].address == IMP)) {
                 cpu->fetched = BusRead(cpu->bus, cpu->addr_abs);
         }
@@ -156,7 +159,7 @@ uint8_t Fetch(struct cpu* cpu) {
 }
 
 //! \brief Simulate clock ticks
-void Clock(struct cpu *cpu) {
+void CpuTick(struct cpu *cpu) {
         if (0 == cpu->cycles) {
                 // Read the next byte to determine which opcode we are using.
                 cpu->opcode = BusRead(cpu->bus, cpu->pc);
@@ -175,6 +178,7 @@ void Clock(struct cpu *cpu) {
                 cpu->cycles += (need_more_cycles_1 & need_more_cycles_2);
         }
 
+        cpu->tick_count++;
         cpu->cycles--;
 }
 

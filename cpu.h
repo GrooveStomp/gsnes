@@ -35,6 +35,9 @@ CpuConnectBus(struct cpu *cpu, struct bus *bus);
 void
 CpuReset(struct cpu *cpu);
 
+void
+CpuTick(struct cpu *cpu);
+
 //-- Debug ---------------------------------------------------------------------
 
 struct debug_instruction {
