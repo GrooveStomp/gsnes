@@ -60,4 +60,10 @@ DebugInstructionMapDeinit(struct debug_instruction_map *map);
 struct debug_instruction_map *
 CpuDisassemble(struct cpu *cpu, uint16_t start, uint16_t stop);
 
+char **
+CpuDebugState(struct cpu *cpu);
+
+void
+CpuDebugStateDeinit(char **debug);
+
 #endif // CPU_VERSION

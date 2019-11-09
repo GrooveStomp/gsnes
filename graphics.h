@@ -93,4 +93,15 @@ GraphicsInitText(struct graphics *graphics, unsigned char *ttfBuffer);
 void
 GraphicsDrawText(struct graphics *graphics, int x, int y, char *string, int fontHeight, uint32_t color);
 
+//! \brief Draws a line from (x1,y1) to (x2,y2)
+//!
+//! \param[in,out] graphics Graphics state to be manipulated
+//! \param[in] x1 horizontal position of the line start
+//! \param[in] y1 vertical position of the line start
+//! \param[in] x2 horizontal position of the line end
+//! \param[in] y2 vertical position of the line end
+//! \param[in] color 32-bit color (R|G|B|A) to render line with
+void
+GraphicsDrawLine(struct graphics *graphics, int x1, int y1, int x2, int y2, uint32_t color);
+
 #endif // GRAPHICS_VERSION

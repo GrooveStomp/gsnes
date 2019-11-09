@@ -219,15 +219,7 @@ uint32_t GraphicsGetPixel(struct graphics *graphics, int x, int y) {
         return 0x00000000;
 }
 
-//! \brief Draws a line from (x1,y1) to (x2,y2)
-//!
-//! \param[in,out] graphics Graphics state to be manipulated
-//! \param[in] x1 horizontal position of the line start.
-//! \param[in] y1 vertical position of the line start.
-//! \param[in] x2 horizontal position of the line end.
-//! \param[in] y2 vertical position of the line end.
-//! \param[in] color color to render the line with.
-void GraphicsDrawLine(struct graphics *graphics, int x1, int y1, int x2, int y2, unsigned int color) {
+void GraphicsDrawLine(struct graphics *graphics, int x1, int y1, int x2, int y2, uint32_t color) {
         int dx = x2 - x1;
         int dy = y2 - y1;
 

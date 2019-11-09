@@ -82,7 +82,7 @@ void Deinit(int code) {
 }
 
 void Init() {
-        char *ttf_filename = "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf";
+        char *ttf_filename = "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf";
 
         cpu = CpuInit();
         if (NULL == cpu) {
@@ -161,6 +161,7 @@ int main(int argc, char **argv) {
         // Disassemble
         struct debug_instruction_map *map = CpuDisassemble(cpu, 0x0000, 0x000F);
 
+        // TODO: Render text for disassembly in while loop below
         /* for (int i = 0; i < map->count; i++) { */
         /*         printf("map{%p}", (void *)map); */
         /*         if (NULL != map) { */
@@ -180,10 +181,21 @@ int main(int argc, char **argv) {
         int running = 1;
         while (running) {
                 GraphicsBegin(graphics);
-                GraphicsClearScreen(graphics, 0x000000FF);
-                GraphicsDrawText(graphics, 50, 50, "Hello", 40, 0xFFFFFFFF);
+                GraphicsClearScreen(graphics, 0xFFFFFFFF);
+                GraphicsDrawLine(graphics, 801, 0, 801, 800, 0x000000FF);
+
+                GraphicsDrawText(graphics, 805, 780, "CPU State", 25, 0x000000FF);
+                char **cpu_state = CpuDebugState(cpu);
+                for (int i = 0; i < 7; i++) {
+                        GraphicsDrawText(graphics, 805, 760 - (18 * i), cpu_state[i], 15, 0x000000FF);
+                }
+                CpuDebugStateDeinit(cpu_state);
+
+                GraphicsDrawLine(graphics, 801, 630, 1200, 630, 0x000000FF);
+
                 GraphicsEnd(graphics);
 
+                // TODO: Hookup input with progressing emulation
                 InputProcess(input);
                 running = !InputIsQuitRequested(input);
 

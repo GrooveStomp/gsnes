@@ -1567,3 +1567,46 @@ struct debug_instruction_map *CpuDisassemble(struct cpu *cpu, uint16_t start, ui
 
         return debug_map;
 }
+
+char **CpuDebugState(struct cpu *cpu) {
+        char **debug = (char **)malloc(sizeof(char *) * 7);
+
+        debug[0] = "        N V - B D I Z C";
+        debug[1] = malloc(strlen("status: 1 1 - 1 1 1 1 1") + 1);
+        sprintf(debug[1], "Status: %d %d - %d %d %d %d %d",
+                GetFlag(cpu, N),
+                GetFlag(cpu, V),
+                GetFlag(cpu, B),
+                GetFlag(cpu, D),
+                GetFlag(cpu, I),
+                GetFlag(cpu, Z),
+                GetFlag(cpu, C));
+
+        debug[2] = malloc(strlen("pc: $0000") + 1);
+        sprintf(debug[2], "PC: $%04X", cpu->pc);
+
+        debug[3] = malloc(strlen("a:  $00") + 1);
+        sprintf(debug[3], "A:  $%02X", cpu->a);
+
+        debug[4] = malloc(strlen("x:  $00") + 1);
+        sprintf(debug[4], "X:  $%02X", cpu->x);
+
+        debug[5] = malloc(strlen("y:  $00") + 1);
+        sprintf(debug[5], "Y:  $%02X", cpu->y);
+
+        debug[6] = malloc(strlen("sp: $0000") + 1);
+        sprintf(debug[6], "SP: $%04X", cpu->sp);
+
+        return debug;
+}
+
+void CpuDebugStateDeinit(char **debug) {
+        if (NULL == debug)
+                return;
+
+        for (int i = 1; i < 7; i++) {
+                if (NULL == debug[i])
+                        continue;
+                free(debug[i]);
+        }
+}
