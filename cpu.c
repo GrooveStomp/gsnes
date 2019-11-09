@@ -1440,6 +1440,10 @@ void DebugInstructionDeinit(struct debug_instruction *self) {
         free(self);
 }
 
+int CpuIsComplete(struct cpu *cpu) {
+        return (0 == cpu->cycles);
+}
+
 struct debug_instruction_map *CpuDisassemble(struct cpu *cpu, uint16_t start, uint16_t stop) {
         int addr = start;
         uint8_t value = 0x00;
@@ -1551,7 +1555,7 @@ struct debug_instruction_map *CpuDisassemble(struct cpu *cpu, uint16_t start, ui
                         ToHexString(value, 2, hex_buf, hex_buf_len);
 
                         char hex_buf2[5];
-                        ToHexString(addr + value, 4, hex_buf2, hex_buf_len);
+                        ToHexString(addr + (int8_t)value, 4, hex_buf2, hex_buf_len);
                         snprintf(text, 256, "%s$%s [$%s] {REL}", text_cpy, hex_buf, hex_buf2);
                 }
 

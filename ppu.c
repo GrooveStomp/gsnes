@@ -29,10 +29,29 @@ struct ppu {
         int16_t scanline; //!< Which row on the screen we are computing.
         int16_t cycle; //!< Which column on the screen we are computing.
 
+        uint8_t **name_tables; //[2][1024];
+        uint8_t **pattern_tables; //[2][4096];
+        uint8_t *palette_tables; //[32];
+
         struct color *palette;
         struct sprite *screen;
-        struct sprite **name_tables;
-        struct sprite **pattern_tables;
+        struct sprite **name_table_sprites;
+        struct sprite **pattern_table_sprites;
+
+        union {
+                struct {
+                        uint8_t grayscale : 1;
+                        uint8_t render_background_left : 1;
+                        uint8_t render_sprites_left : 1;
+                        uint8_t render_background : 1;
+                        uint8_t render_sprites : 1;
+                        uint8_t enhance_red : 1;
+                        uint8_t enhance_green : 1;
+                        uint8_t enhance_blue : 1;
+                };
+                uint8_t reg;
+
+        } mask;
 };
 
 struct ppu *PpuInit() {
@@ -43,23 +62,42 @@ struct ppu *PpuInit() {
 
         ppu->palette = (struct color *)malloc(sizeof(struct color) * 0x40);
         if (NULL == ppu->palette) {
-                free(ppu);
+                PpuDeinit(ppu);
                 return NULL;
         }
 
         ppu->screen = SpriteInit(256, 240);
         if (NULL == ppu->screen) {
+                PpuDeinit(ppu);
                 return NULL;
         }
 
-        ppu->name_tables = (struct sprite **)malloc(sizeof(struct sprite *) * 2);
-        ppu->name_tables[0] = SpriteInit(256, 240);
-        ppu->name_tables[1] = SpriteInit(256, 240);
+        ppu->name_tables = (uint8_t **)calloc(2, 1024);
+        if (NULL == ppu->name_tables) {
+                PpuDeinit(ppu);
+                return NULL;
+        }
+
+        ppu->pattern_tables = (uint8_t **)calloc(2, 4096);
+        if (NULL == ppu->pattern_tables) {
+                PpuDeinit(ppu);
+                return NULL;
+        }
+
+        ppu->palette_tables = (uint8_t *)calloc(32, 1);
+        if (NULL == ppu->palette_tables) {
+                PpuDeinit(ppu);
+                return NULL;
+        }
+
+        ppu->name_table_sprites = (struct sprite **)malloc(sizeof(struct sprite *) * 2);
+        ppu->name_table_sprites[0] = SpriteInit(256, 240);
+        ppu->name_table_sprites[1] = SpriteInit(256, 240);
         // TODO: Error handling
 
-        ppu->pattern_tables = (struct sprite **)malloc(sizeof(struct sprite *) * 2);
-        ppu->pattern_tables[0] = SpriteInit(128, 128);
-        ppu->pattern_tables[1] = SpriteInit(128, 128);
+        ppu->pattern_table_sprites = (struct sprite **)malloc(sizeof(struct sprite *) * 2);
+        ppu->pattern_table_sprites[0] = SpriteInit(128, 128);
+        ppu->pattern_table_sprites[1] = SpriteInit(128, 128);
         // TODO: Error handling
 
         ppu->palette[0x00] = ColorInitInts(84, 84, 84, 255);
@@ -155,6 +193,7 @@ void PpuAttachCart(struct ppu *ppu, struct cart *cart) {
 //!
 //! \param[in,out] ppu
 void PpuTick(struct ppu *ppu) {
+        // For now we are just drawing random noise.
         uint16_t idx = (rand() % 2) ? 0x3F : 0x30;
         struct color color = ppu->palette[idx];
         SpriteSetPixel(ppu->screen, ppu->cycle - 1, ppu->scanline, color.rgba);
@@ -170,4 +209,72 @@ void PpuTick(struct ppu *ppu) {
                         ppu->is_frame_complete = true;
                 }
         }
+}
+
+struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i) {
+        return ppu->pattern_table_sprites[i];
+}
+
+uint8_t PpuRead(struct ppu *ppu, uint16_t addr) {
+        uint8_t data = 0x00;
+        addr &= 0x3FFF; // 0x3FFFF is PPU base memory.
+
+        if (CartPpuRead(ppu->cart, addr, &data)) {
+        } else if (addr >= 0x0000 && addr <= 0x1FFF) { // Pattern Memory.
+                // MSB determines which table.
+                uint16_t pattern_index = (addr & 0x1000) >> 12;
+                data = ppu->pattern_tables[pattern_index][addr & 0x0FFF];
+        } else if (addr >= 0x2000 && addr <= 0x2FFF) {
+        } else if (addr >= 0x3000 && addr <= 0x3FFF) { // Palette Memory.
+                addr &= 0x001F; // Mask the bottom 5 bits.
+
+                // Mirroring;
+                if (addr == 0x0010) addr = 0x0000;
+                if (addr == 0x0014) addr = 0x0004;
+                if (addr == 0x0018) addr = 0x0008;
+                if (addr == 0x001C) addr = 0x000C;
+                data = ppu->palette_tables[addr] & (ppu->mask.grayscale ? 0x30 : 0x3F);
+        }
+
+        return data;
+}
+
+void PpuWrite(struct ppu *ppu, uint16_t addr, uint8_t data) {
+        addr &= 0x3FFF; // 0x3FFFF is PPU base memory.
+
+        if (CartPpuWrite(ppu->cart, addr, data)) {
+        } else if (addr >= 0x0000 && addr <= 0x1FFF) { // Pattern Memory.
+                // Pattern memory is _usually_ a ROM, but we support writes here
+                // as well.
+
+                // MSB determines which table.
+                uint16_t pattern_index = (addr & 0x1000) >> 12;
+                ppu->pattern_tables[pattern_index][addr & 0x0FFF] = data;
+        } else if (addr >= 0x2000 && addr <= 0x2FFF) {
+        } else if (addr >= 0x3000 && addr <= 0x3FFF) { // Palette Memory.
+                addr &= 0x001F; // Mask the bottom 5 bits.
+
+                // Mirroring;
+                if (addr == 0x0010) addr = 0x0000;
+                if (addr == 0x0014) addr = 0x0004;
+                if (addr == 0x0018) addr = 0x0008;
+                if (addr == 0x001C) addr = 0x000C;
+                ppu->palette_tables[addr] = data;
+        }
+}
+
+//! \brief Get the specified color from palette memory
+//!
+//! \param palette which palette to use for color
+//! \param pixel 0, 1, 2 or 3
+struct color *GetColorFromPaletteRam(struct ppu *ppu, uint8_t palette, uint8_t pixel) {
+        uint16_t palette_id = palette << 2; // Multiply the palette by 4 to get the
+                                   // physical offset.
+
+        uint16_t addr = 0x3F00 + // Base address of palette memory.
+                palette_id + // Which palette to read.
+                pixel; // Offset of the specific color for this palette.
+
+        // "& 0x3F" Stops read past the bounds of ppu->palette.
+        return &ppu->palette[PpuRead(ppu, addr) & 0x3F];
 }
