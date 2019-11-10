@@ -8,46 +8,47 @@
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
-  Based off of: One Lone Coder NES Emulator Copyright (C) 2018 Javidx9
+  Based off of: One Lone Coder NES Emulator Copyright (C) 2019 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
+//! \file ppu.c
 #include <stdlib.h> // malloc, free
 #include <stdbool.h> // bool
+#include <stdio.h>
 
 #include "ppu.h"
 #include "cart.h"
 #include "color.h"
 #include "sprite.h"
-//! \file ppu.c
 
 struct ppu {
         struct cart *cart;
 
-        bool is_frame_complete;
+        bool isFrameComplete;
         int16_t scanline; //!< Which row on the screen we are computing.
         int16_t cycle; //!< Which column on the screen we are computing.
 
-        uint8_t **name_tables; //[2][1024];
-        uint8_t **pattern_tables; //[2][4096];
-        uint8_t *palette_tables; //[32];
+        uint8_t **nameTables; //[2][1024];
+        uint8_t **patternTables; //[2][4096];
+        uint8_t *paletteTables; //[32];
 
         struct color *palette;
         struct sprite *screen;
-        struct sprite **name_table_sprites;
-        struct sprite **pattern_table_sprites;
+        struct sprite **nameTableSprites;
+        struct sprite **patternTableSprites;
 
         union {
                 struct {
                         uint8_t grayscale : 1;
-                        uint8_t render_background_left : 1;
-                        uint8_t render_sprites_left : 1;
-                        uint8_t render_background : 1;
-                        uint8_t render_sprites : 1;
-                        uint8_t enhance_red : 1;
-                        uint8_t enhance_green : 1;
-                        uint8_t enhance_blue : 1;
+                        uint8_t renderBackgroundLeft : 1;
+                        uint8_t renderSpritesLeft : 1;
+                        uint8_t renderBackground : 1;
+                        uint8_t renderSprites : 1;
+                        uint8_t enhanceRed : 1;
+                        uint8_t enhanceGreen : 1;
+                        uint8_t enhanceBlue : 1;
                 };
                 uint8_t reg;
 
@@ -60,7 +61,7 @@ struct ppu *PpuInit() {
                 return NULL;
         }
 
-        ppu->palette = (struct color *)malloc(sizeof(struct color) * 0x40);
+        ppu->palette = (struct color *)calloc(0x40, sizeof(struct color));
         if (NULL == ppu->palette) {
                 PpuDeinit(ppu);
                 return NULL;
@@ -72,32 +73,32 @@ struct ppu *PpuInit() {
                 return NULL;
         }
 
-        ppu->name_tables = (uint8_t **)calloc(2, 1024);
-        if (NULL == ppu->name_tables) {
+        ppu->nameTables = (uint8_t **)calloc(2, 1024);
+        if (NULL == ppu->nameTables) {
                 PpuDeinit(ppu);
                 return NULL;
         }
 
-        ppu->pattern_tables = (uint8_t **)calloc(2, 4096);
-        if (NULL == ppu->pattern_tables) {
+        ppu->patternTables = (uint8_t **)calloc(2, 4096);
+        if (NULL == ppu->patternTables) {
                 PpuDeinit(ppu);
                 return NULL;
         }
 
-        ppu->palette_tables = (uint8_t *)calloc(32, 1);
-        if (NULL == ppu->palette_tables) {
+        ppu->paletteTables = (uint8_t *)calloc(32, 1);
+        if (NULL == ppu->paletteTables) {
                 PpuDeinit(ppu);
                 return NULL;
         }
 
-        ppu->name_table_sprites = (struct sprite **)malloc(sizeof(struct sprite *) * 2);
-        ppu->name_table_sprites[0] = SpriteInit(256, 240);
-        ppu->name_table_sprites[1] = SpriteInit(256, 240);
+        ppu->nameTableSprites = (struct sprite **)calloc(2, sizeof(struct sprite *));
+        ppu->nameTableSprites[0] = SpriteInit(256, 240);
+        ppu->nameTableSprites[1] = SpriteInit(256, 240);
         // TODO: Error handling
 
-        ppu->pattern_table_sprites = (struct sprite **)malloc(sizeof(struct sprite *) * 2);
-        ppu->pattern_table_sprites[0] = SpriteInit(128, 128);
-        ppu->pattern_table_sprites[1] = SpriteInit(128, 128);
+        ppu->patternTableSprites = (struct sprite **)calloc(2, sizeof(struct sprite *));
+        ppu->patternTableSprites[0] = SpriteInit(128, 128);
+        ppu->patternTableSprites[1] = SpriteInit(128, 128);
         // TODO: Error handling
 
         ppu->palette[0x00] = ColorInitInts(84, 84, 84, 255);
@@ -189,7 +190,7 @@ void PpuAttachCart(struct ppu *ppu, struct cart *cart) {
 //! Advance the pixel right one pixel on the current row, or to the start of the
 //! next row if we've reached the screen edge.
 //! When the ppu has reached the end of the screen entirely, set
-//! is_frame_complete to true.
+//! isFrameComplete to true.
 //!
 //! \param[in,out] ppu
 void PpuTick(struct ppu *ppu) {
@@ -206,13 +207,13 @@ void PpuTick(struct ppu *ppu) {
 
                 if (261 < ppu->scanline) {
                         ppu->scanline = -1;
-                        ppu->is_frame_complete = true;
+                        ppu->isFrameComplete = true;
                 }
         }
 }
 
 struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i) {
-        return ppu->pattern_table_sprites[i];
+        return ppu->patternTableSprites[i];
 }
 
 uint8_t PpuRead(struct ppu *ppu, uint16_t addr) {
@@ -223,7 +224,7 @@ uint8_t PpuRead(struct ppu *ppu, uint16_t addr) {
         } else if (addr >= 0x0000 && addr <= 0x1FFF) { // Pattern Memory.
                 // MSB determines which table.
                 uint16_t pattern_index = (addr & 0x1000) >> 12;
-                data = ppu->pattern_tables[pattern_index][addr & 0x0FFF];
+                data = ppu->patternTables[pattern_index][addr & 0x0FFF];
         } else if (addr >= 0x2000 && addr <= 0x2FFF) {
         } else if (addr >= 0x3000 && addr <= 0x3FFF) { // Palette Memory.
                 addr &= 0x001F; // Mask the bottom 5 bits.
@@ -233,7 +234,7 @@ uint8_t PpuRead(struct ppu *ppu, uint16_t addr) {
                 if (addr == 0x0014) addr = 0x0004;
                 if (addr == 0x0018) addr = 0x0008;
                 if (addr == 0x001C) addr = 0x000C;
-                data = ppu->palette_tables[addr] & (ppu->mask.grayscale ? 0x30 : 0x3F);
+                data = ppu->paletteTables[addr] & (ppu->mask.grayscale ? 0x30 : 0x3F);
         }
 
         return data;
@@ -249,7 +250,7 @@ void PpuWrite(struct ppu *ppu, uint16_t addr, uint8_t data) {
 
                 // MSB determines which table.
                 uint16_t pattern_index = (addr & 0x1000) >> 12;
-                ppu->pattern_tables[pattern_index][addr & 0x0FFF] = data;
+                ppu->patternTables[pattern_index][addr & 0x0FFF] = data;
         } else if (addr >= 0x2000 && addr <= 0x2FFF) {
         } else if (addr >= 0x3000 && addr <= 0x3FFF) { // Palette Memory.
                 addr &= 0x001F; // Mask the bottom 5 bits.
@@ -259,7 +260,7 @@ void PpuWrite(struct ppu *ppu, uint16_t addr, uint8_t data) {
                 if (addr == 0x0014) addr = 0x0004;
                 if (addr == 0x0018) addr = 0x0008;
                 if (addr == 0x001C) addr = 0x000C;
-                ppu->palette_tables[addr] = data;
+                ppu->paletteTables[addr] = data;
         }
 }
 
@@ -277,4 +278,16 @@ struct color *GetColorFromPaletteRam(struct ppu *ppu, uint8_t palette, uint8_t p
 
         // "& 0x3F" Stops read past the bounds of ppu->palette.
         return &ppu->palette[PpuRead(ppu, addr) & 0x3F];
+}
+
+void PpuReset(struct ppu *ppu) {
+        // TODO PpuReset()
+}
+
+int PpuIsFrameComplete(struct ppu *ppu) {
+        return ppu->isFrameComplete;
+}
+
+void PpuResetFrameCompletion(struct ppu *ppu) {
+        ppu->isFrameComplete = false;
 }

@@ -8,14 +8,14 @@
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
-  Based off of: One Lone Coder NES Emulator Copyright (C) 2018 Javidx9
+  Based off of: One Lone Coder NES Emulator Copyright (C) 2019 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
+//! \file mapper000.h
 #include <stdint.h>
 #include <stdbool.h>
-//! \file mapper000.h
 
 struct mapper000;
 

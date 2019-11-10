@@ -8,14 +8,14 @@
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
-  Based off of: One Lone Coder NES Emulator Copyright (C) 2018 Javidx9
+  Based off of: One Lone Coder NES Emulator Copyright (C) 2019 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
+//! \file ppu.h
 #ifndef PPU_VERSION
 #define PPU_VERSION "0.1.0"
-//! \file ppu.h
 
 struct ppu;
 struct cart;
@@ -31,5 +31,14 @@ PpuAttachCart(struct ppu *ppu, struct cart *cart);
 
 void
 PpuTick(struct ppu *ppu);
+
+void
+PpuReset(struct ppu *ppu);
+
+int
+PpuIsFrameComplete(struct ppu *ppu);
+
+void
+PpuResetFrameCompletion(struct ppu *ppu);
 
 #endif // PPU_VERSION

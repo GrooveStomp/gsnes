@@ -8,13 +8,13 @@
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
-  Based off of: One Lone Coder NES Emulator Copyright (C) 2018 Javidx9
+  Based off of: One Lone Coder NES Emulator Copyright (C) 2019 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
-#include <stdint.h>
 //! \file mapper.h
+#include <stdint.h>
 
 typedef bool (*map_cpu_read_fn)(void *interface, uint16_t addr, uint32_t *mapped_addr);
 

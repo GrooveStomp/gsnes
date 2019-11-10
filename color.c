@@ -8,12 +8,10 @@
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
-  Based off of: One Lone Coder Console Game Engine Copyright (C) 2018 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
-
 //! \file color.c
 
 #include "color.h"

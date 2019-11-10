@@ -8,11 +8,12 @@
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
-  Based off of: One Lone Coder NES Emulator Copyright (C) 2018 Javidx9
+  Based off of: One Lone Coder NES Emulator Copyright (C) 2019 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
+//! \file cart.c
 #include <stdint.h>
 #include <stdio.h> // fopen
 #include <stdbool.h> // bool
@@ -22,7 +23,6 @@
 #include "util.h"
 #include "mapper.h"
 #include "mapper000.h"
-//! \file cart.c
 
 struct cart {
         uint8_t mapper_id;
@@ -130,21 +130,21 @@ struct cart *CartInit(char *filename) {
 
         cart->is_image_valid = true;
         fclose(f);
+
         return cart;
 }
 
 void CartDeinit(struct cart *cart) {
-        if (NULL == cart) {
+        if (NULL == cart)
                 return;
-        }
 
-        if (NULL != cart->chr_mem) {
+        if (NULL != cart->chr_mem)
                 free(cart->chr_mem);
-        }
 
-        if (NULL != cart->prg_mem) {
+        if (NULL != cart->prg_mem)
                 free(cart->prg_mem);
-        }
+
+        free(cart);
 }
 
 bool CartCpuRead(struct cart *cart, uint16_t addr, uint8_t *data) {

@@ -8,7 +8,7 @@
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
-  Based off of: One Lone Coder NES Emulator Copyright (C) 2018 Javidx9
+  Based off of: One Lone Coder NES Emulator Copyright (C) 2019 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
@@ -25,19 +25,21 @@ struct bus {
         struct cpu *cpu;
         struct ppu *ppu;
         struct cart *cart;
-        uint8_t *cpu_ram; // Dummy RAM for prototyping
-        uint32_t tick_count;
+        uint8_t *cpuRam; // Dummy RAM for prototyping
+        uint32_t tickCount;
 };
 
-struct bus *BusInit(struct cpu *cpu) {
+struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
         struct bus *bus = (struct bus *)malloc(sizeof(struct bus));
 
-        bus->cpu_ram = (uint8_t *)malloc(64 * 1024);
+        bus->cpuRam = (uint8_t *)malloc(64 * 1024);
         for (int i = 0; i < 64 * 1024; i++) {
-                bus->cpu_ram[i] = 0x00;
+                bus->cpuRam[i] = 0x00;
         }
 
         bus->cpu = cpu;
+        bus->ppu = ppu;
+
         return bus;
 }
 
@@ -46,8 +48,8 @@ void BusDeinit(struct bus *bus) {
                 return;
         }
 
-        if (NULL != bus->cpu_ram) {
-                free(bus->cpu_ram);
+        if (NULL != bus->cpuRam) {
+                free(bus->cpuRam);
         }
 
         free(bus);
@@ -55,13 +57,13 @@ void BusDeinit(struct bus *bus) {
 
 void BusWrite(struct bus *bus, uint16_t addr, uint8_t data) {
         if (addr >= 0x0000 && addr <= 0xFFFF) {
-                bus->cpu_ram[addr] = data;
+                bus->cpuRam[addr] = data;
         }
 }
 
 uint8_t BusRead(struct bus *bus, uint16_t addr) {
         if (addr >= 0x0000 && addr <= 0xFFFF) {
-                return bus->cpu_ram[addr];
+                return bus->cpuRam[addr];
         }
 
         return 0x00;
@@ -73,24 +75,18 @@ void BusAttachCart(struct bus *bus, struct cart *cart) {
 }
 
 void BusReset(struct bus *bus) {
+        //CartReset(bus->cart);
         CpuReset(bus->cpu);
-        bus->tick_count = 0;
+        PpuReset(bus->ppu);
+        bus->tickCount = 0;
 }
 
-//! \brief Increment the system by the fastest clock tick
-//!
-//! The running frequency is determined by the fastest clock in the system - in
-//! this case, the PPU.  Every other clock is some fraction slower than the PPU,
-//! so we compute a modulus every cycle to determine when to increment other
-//! clocks.
-//!
-//! \param[in,out] bus
 void BusTick(struct bus *bus) {
         PpuTick(bus->ppu);
 
-        if (0 == (bus->tick_count % 3)) {
+        if (0 == (bus->tickCount % 3)) {
                 CpuTick(bus->cpu);
         }
 
-        bus->tick_count++;
+        bus->tickCount++;
 }

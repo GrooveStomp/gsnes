@@ -8,14 +8,13 @@
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
-  Based off of: One Lone Coder NES Emulator Copyright (C) 2018 Javidx9
+  Based off of: One Lone Coder NES Emulator Copyright (C) 2019 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
-#include <stdint.h>
-
 //! \file cpu.h
+#include <stdint.h>
 
 #ifndef CPU_VERSION
 #define CPU_VERSION "0.1.0"
@@ -38,7 +37,16 @@ CpuReset(struct cpu *cpu);
 void
 CpuTick(struct cpu *cpu);
 
+int
+CpuIsComplete(struct cpu *cpu);
+
 //-- Debug ---------------------------------------------------------------------
+
+char **
+CpuDebugStateInit(struct cpu *cpu);
+
+void
+CpuDebugStateDeinit(char **debug);
 
 struct debug_instruction {
         uint16_t address;
@@ -46,7 +54,7 @@ struct debug_instruction {
         int text_length;
 };
 
-struct debug_instruction_map {
+struct disassembly {
         struct debug_instruction **map;
         int count;
 };
@@ -54,16 +62,13 @@ struct debug_instruction_map {
 void
 DebugInstructionDeinit(struct debug_instruction *inst);
 
-void
-DebugInstructionMapDeinit(struct debug_instruction_map *map);
-
-struct debug_instruction_map *
-CpuDisassemble(struct cpu *cpu, uint16_t start, uint16_t stop);
-
-char **
-CpuDebugState(struct cpu *cpu);
+struct disassembly *
+DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t stop);
 
 void
-CpuDebugStateDeinit(char **debug);
+DisassemblyDeinit(struct disassembly *disassembly);
+
+int
+DisassemblyFindPc(struct disassembly *disassembly, struct cpu *cpu);
 
 #endif // CPU_VERSION

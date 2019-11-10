@@ -8,14 +8,10 @@
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
-  Based off of: One Lone Coder Console Game Engine Copyright (C) 2018 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
-  Notice: Creative Commons Attribution 4.0 International License (CC-BY 4.0)
  ******************************************************************************/
-#include <stdint.h>
-
 //! \file color.h
 //! This interface attempts to provide an intuitive wrapper around "raw"
 //! unsigned integer colors.
@@ -23,6 +19,7 @@
 //! An unsigned integer color is packed 32-bit value consisting of 4 pixel
 //! elements: RGBA.  These elements are stored as written: RGBA, or, visually
 //! mapped as hex symbols: RRGGBBAA.
+#include <stdint.h>
 
 #ifndef COLOR_VERSION
 #define COLOR_VERSION "0.2-gsnes" //!< include guard

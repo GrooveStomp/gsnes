@@ -9,11 +9,12 @@
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
-  Based off of: olcNES Copyright (C) 2018 Javidx9
+  Based off of: olcNES Copyright (C) 2019 Javidx9
   This program comes with ABSOLUTELY NO WARRANTY.
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
+//! \file cpu.c
 #include <stdbool.h> // bool
 #include <stdio.h> // snprintf
 #include <stdlib.h> // malloc, free
@@ -21,8 +22,6 @@
 
 #include "cpu.h"
 #include "bus.h"
-
-//! \file cpu.c
 
 // Addressing Modes
 uint8_t ABS(struct cpu *cpu);
@@ -92,11 +91,11 @@ struct cpu {
         uint8_t status; //!< Status Register
 
         uint8_t fetched; //!< Any data fetched for the current instruction
-        uint16_t addr_abs;
-        uint16_t addr_rel;
+        uint16_t addrAbs;
+        uint16_t addrRel;
         uint8_t opcode; //!< Opcode for the currently executing instruction
         uint8_t cycles; //!< How many cycles the current instruction takes
-        uint32_t tick_count;
+        uint32_t tickCount;
 };
 
 enum status_flags {
@@ -122,11 +121,11 @@ struct cpu *CpuInit() {
         cpu->pc = 0x0000;
         cpu->status = 0x00;
 
-        cpu->addr_abs = 0x0000;
-        cpu->addr_rel = 0x00;
+        cpu->addrAbs = 0x0000;
+        cpu->addrRel = 0x00;
         cpu->opcode = 0x00;
         cpu->cycles = 0;
-        cpu->tick_count = 0;
+        cpu->tickCount = 0;
 }
 
 void CpuDeinit(struct cpu *cpu) {
@@ -152,7 +151,7 @@ static void SetFlag(struct cpu *cpu, enum status_flags f, bool v) {
 
 static uint8_t Fetch(struct cpu* cpu) {
         if (!(instruction_map[cpu->opcode].address == IMP)) {
-                cpu->fetched = BusRead(cpu->bus, cpu->addr_abs);
+                cpu->fetched = BusRead(cpu->bus, cpu->addrAbs);
         }
 
         return cpu->fetched;
@@ -178,8 +177,12 @@ void CpuTick(struct cpu *cpu) {
                 cpu->cycles += (need_more_cycles_1 & need_more_cycles_2);
         }
 
-        cpu->tick_count++;
+        cpu->tickCount++;
         cpu->cycles--;
+}
+
+int CpuIsComplete(struct cpu *cpu) {
+        return (0 == cpu->cycles);
 }
 
 void CpuReset(struct cpu *cpu) {
@@ -189,14 +192,14 @@ void CpuReset(struct cpu *cpu) {
         cpu->sp = 0xFD;
         cpu->status = 0x00 | U;
 
-        cpu->addr_abs = 0xFFFC;
-        uint16_t lo = BusRead(cpu->bus, cpu->addr_abs + 0);
-        uint16_t hi = BusRead(cpu->bus, cpu->addr_abs + 1);
+        cpu->addrAbs = 0xFFFC;
+        uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0);
+        uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1);
 
         cpu->pc = (hi << 8) | lo;
 
-        cpu->addr_rel = 0x0000;
-        cpu->addr_abs = 0x0000;
+        cpu->addrRel = 0x0000;
+        cpu->addrAbs = 0x0000;
         cpu->fetched = 0x00;
 
         cpu->cycles = 8;
@@ -215,9 +218,9 @@ void Irq(struct cpu *cpu) {
                 BusWrite(cpu->bus, 0x0100 + cpu->sp, cpu->status);
                 cpu->sp--;
 
-                cpu->addr_abs = 0xFFFE;
-                uint16_t lo = BusRead(cpu->bus, cpu->addr_abs + 0);
-                uint16_t hi = BusRead(cpu->bus, cpu->addr_abs + 1);
+                cpu->addrAbs = 0xFFFE;
+                uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0);
+                uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1);
                 cpu->pc = (hi << 8) | lo;
 
                 cpu->cycles = 7;
@@ -236,9 +239,9 @@ void Nmi(struct cpu *cpu) {
         BusWrite(cpu->bus, 0x0100 + cpu->sp, cpu->status);
         cpu->sp--;
 
-        cpu->addr_abs = 0xFFFA;
-        uint16_t lo = BusRead(cpu->bus, cpu->addr_abs + 0);
-        uint16_t hi = BusRead(cpu->bus, cpu->addr_abs + 1);
+        cpu->addrAbs = 0xFFFA;
+        uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0);
+        uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1);
         cpu->pc = (hi << 8) | lo;
 
         cpu->cycles = 8;
@@ -313,7 +316,7 @@ uint8_t ABS(struct cpu *cpu) {
         uint16_t hi = BusRead(cpu->bus, cpu->pc);
         cpu->pc++;
 
-        cpu->addr_abs = (hi << 8) | lo;
+        cpu->addrAbs = (hi << 8) | lo;
 
         return 0;
 }
@@ -327,12 +330,12 @@ uint8_t ABX(struct cpu *cpu) {
         uint16_t hi = BusRead(cpu->bus, cpu->pc);
         cpu->pc++;
 
-        cpu->addr_abs = (hi << 8) | lo;
-        cpu->addr_abs += cpu->x;
+        cpu->addrAbs = (hi << 8) | lo;
+        cpu->addrAbs += cpu->x;
 
         // If the memory page has changed, then this addressing mode may take
         // another clock cycle to execute.
-        if ((cpu->addr_abs & 0xFF00) != (hi << 8))
+        if ((cpu->addrAbs & 0xFF00) != (hi << 8))
                 return 1;
         else
                 return 0;
@@ -347,12 +350,12 @@ uint8_t ABY(struct cpu *cpu) {
         uint16_t hi = BusRead(cpu->bus, cpu->pc);
         cpu->pc++;
 
-        cpu->addr_abs = (hi << 8) | lo;
-        cpu->addr_abs += cpu->y;
+        cpu->addrAbs = (hi << 8) | lo;
+        cpu->addrAbs += cpu->y;
 
         // If the memory page has changed, then this addressing mode may take
         // another clock cycle to execute.
-        if ((cpu->addr_abs & 0xFF00) != (hi << 8))
+        if ((cpu->addrAbs & 0xFF00) != (hi << 8))
                 return 1;
         else
                 return 0;
@@ -366,7 +369,7 @@ uint8_t ABY(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t IMM(struct cpu *cpu) {
-        cpu->addr_abs = cpu->pc++;
+        cpu->addrAbs = cpu->pc++;
         return 0;
 }
 
@@ -405,9 +408,9 @@ uint8_t IND(struct cpu *cpu) {
         uint16_t ptr = (ptr_hi << 8) | ptr_lo;
 
         if (ptr_lo == 0x00FF) { // Simulate page boundary hardware bug
-                cpu->addr_abs = (BusRead(cpu->bus, ptr & 0xFF00) << 8) | BusRead(cpu->bus, ptr + 0);
+                cpu->addrAbs = (BusRead(cpu->bus, ptr & 0xFF00) << 8) | BusRead(cpu->bus, ptr + 0);
         } else { // Behave normally
-                cpu->addr_abs = (BusRead(cpu->bus, ptr + 1) << 8) | BusRead(cpu->bus, ptr + 0);
+                cpu->addrAbs = (BusRead(cpu->bus, ptr + 1) << 8) | BusRead(cpu->bus, ptr + 0);
         }
 
         return 0;
@@ -429,7 +432,7 @@ uint8_t IZX(struct cpu *cpu) {
         uint16_t lo = BusRead(cpu->bus, offset & 0x00FF);
         uint16_t hi = BusRead(cpu->bus, (offset +  1) & 0x00FF);
 
-        cpu->addr_abs = (hi << 8) | lo;
+        cpu->addrAbs = (hi << 8) | lo;
 
         return 0;
 }
@@ -454,10 +457,10 @@ uint8_t IZY(struct cpu *cpu) {
         uint16_t lo = BusRead(cpu->bus, t & 0x00FF);
         uint16_t hi = BusRead(cpu->bus, (t + 1) & 0x00FF);
 
-        cpu->addr_abs = (hi << 8) | lo;
-        cpu->addr_abs += cpu->y;
+        cpu->addrAbs = (hi << 8) | lo;
+        cpu->addrAbs += cpu->y;
 
-        if ((cpu->addr_abs & 0xFF00) != (hi << 8))
+        if ((cpu->addrAbs & 0xFF00) != (hi << 8))
                 return 1;
         else
                 return 0;
@@ -472,7 +475,7 @@ uint8_t IZY(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t REL(struct cpu *cpu) {
-        cpu->addr_rel = BusRead(cpu->bus, cpu->pc);
+        cpu->addrRel = BusRead(cpu->bus, cpu->pc);
         cpu->pc++;
 
         // REL involves signed values for jumps.
@@ -483,10 +486,10 @@ uint8_t REL(struct cpu *cpu) {
 
         // Check if the leading bit of this byte is a 1, indicating a negative
         // number.
-        if (cpu->addr_rel & 0x80) {
-                // If addr_rel is negative, then sign-extend the address to the
+        if (cpu->addrRel & 0x80) {
+                // If addrRel is negative, then sign-extend the address to the
                 // full 16-bits so the addition works out.
-                cpu->addr_rel |= 0xFF00;
+                cpu->addrRel |= 0xFF00;
         }
 
         return 0;
@@ -500,9 +503,9 @@ uint8_t REL(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t ZP0(struct cpu *cpu) {
-        cpu->addr_abs = BusRead(cpu->bus, cpu->pc);
+        cpu->addrAbs = BusRead(cpu->bus, cpu->pc);
         cpu->pc++;
-        cpu->addr_abs &= 0x00FF;
+        cpu->addrAbs &= 0x00FF;
         return 0;
 }
 
@@ -514,9 +517,9 @@ uint8_t ZP0(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t ZPX(struct cpu *cpu) {
-        cpu->addr_abs = BusRead(cpu->bus, cpu->pc) + cpu->x;
+        cpu->addrAbs = BusRead(cpu->bus, cpu->pc) + cpu->x;
         cpu->pc++;
-        cpu->addr_abs &= 0x00FF;
+        cpu->addrAbs &= 0x00FF;
         return 0;
 }
 
@@ -528,9 +531,9 @@ uint8_t ZPX(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t ZPY(struct cpu *cpu) {
-        cpu->addr_abs = BusRead(cpu->bus, cpu->pc) + cpu->y;
+        cpu->addrAbs = BusRead(cpu->bus, cpu->pc) + cpu->y;
         cpu->pc++;
-        cpu->addr_abs &= 0x00FF;
+        cpu->addrAbs &= 0x00FF;
         return 0;
 }
 
@@ -566,7 +569,7 @@ uint8_t ASL(struct cpu *cpu) {
         if (instruction_map[cpu->opcode].address == IMP) {
                 cpu->a = tmp & 0x00FF;
         } else {
-                BusWrite(cpu->bus, cpu->addr_abs, tmp & 0x00FF);
+                BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
         }
 
         return 0;
@@ -582,16 +585,16 @@ uint8_t BCC(struct cpu *cpu) {
         if (GetFlag(cpu, C) == 0) {
                 // Branch instructions implicitly increment clock cycles.
                 cpu->cycles++;
-                cpu->addr_abs = cpu->pc + cpu->addr_rel;
+                cpu->addrAbs = cpu->pc + cpu->addrRel;
 
                 // If the memory page is different, then incur another clock
                 // cycle.
-                if ((cpu->addr_abs & 0xFF00) != (cpu->pc & 0xFF00)) {
+                if ((cpu->addrAbs & 0xFF00) != (cpu->pc & 0xFF00)) {
                         cpu->cycles++;
                 }
 
                 // Set the program counter.
-                cpu->pc = cpu->addr_abs;
+                cpu->pc = cpu->addrAbs;
         }
 
         return 0;
@@ -607,16 +610,16 @@ uint8_t BCS(struct cpu *cpu) {
         if (GetFlag(cpu, C) == 1) {
                 // Branch instructions implicitly increment clock cycles.
                 cpu->cycles++;
-                cpu->addr_abs = cpu->pc + cpu->addr_rel;
+                cpu->addrAbs = cpu->pc + cpu->addrRel;
 
                 // If the memory page is different, then incur another clock
                 // cycle.
-                if ((cpu->addr_abs & 0xFF00) != (cpu->pc & 0xFF00)) {
+                if ((cpu->addrAbs & 0xFF00) != (cpu->pc & 0xFF00)) {
                         cpu->cycles++;
                 }
 
                 // Set the program counter.
-                cpu->pc = cpu->addr_abs;
+                cpu->pc = cpu->addrAbs;
         }
 
         return 0;
@@ -632,16 +635,16 @@ uint8_t BEQ(struct cpu *cpu) {
         if (GetFlag(cpu, Z) == 1) {
                 // Branch instructions implicitly increment clock cycles.
                 cpu->cycles++;
-                cpu->addr_abs = cpu->pc + cpu->addr_rel;
+                cpu->addrAbs = cpu->pc + cpu->addrRel;
 
                 // If the memory page is different, then incur another clock
                 // cycle.
-                if ((cpu->addr_abs & 0xFF00) != (cpu->pc & 0xFF00)) {
+                if ((cpu->addrAbs & 0xFF00) != (cpu->pc & 0xFF00)) {
                         cpu->cycles++;
                 }
 
                 // Set the program counter.
-                cpu->pc = cpu->addr_abs;
+                cpu->pc = cpu->addrAbs;
         }
 
         return 0;
@@ -669,13 +672,13 @@ uint8_t BIT(struct cpu *cpu) {
 uint8_t BMI(struct cpu *cpu) {
         if (GetFlag(cpu, N) == 1) {
                 cpu->cycles++;
-                cpu->addr_abs = cpu->pc + cpu->addr_rel;
+                cpu->addrAbs = cpu->pc + cpu->addrRel;
 
-                if ((cpu->addr_abs & 0xFF00) != (cpu->pc & 0xFF00)) {
+                if ((cpu->addrAbs & 0xFF00) != (cpu->pc & 0xFF00)) {
                         cpu->cycles++;
                 }
 
-                cpu->pc = cpu->addr_abs;
+                cpu->pc = cpu->addrAbs;
         }
         return 0;
 }
@@ -689,13 +692,13 @@ uint8_t BMI(struct cpu *cpu) {
 uint8_t BNE(struct cpu *cpu) {
         if (GetFlag(cpu, Z) == 0) {
                 cpu->cycles++;
-                cpu->addr_abs = cpu->pc + cpu->addr_rel;
+                cpu->addrAbs = cpu->pc + cpu->addrRel;
 
-                if ((cpu->addr_abs & 0xFF00) != (cpu->pc & 0xFF00)) {
+                if ((cpu->addrAbs & 0xFF00) != (cpu->pc & 0xFF00)) {
                         cpu->cycles++;
                 }
 
-                cpu->pc = cpu->addr_abs;
+                cpu->pc = cpu->addrAbs;
         }
         return 0;
 }
@@ -709,13 +712,13 @@ uint8_t BNE(struct cpu *cpu) {
 uint8_t BPL(struct cpu *cpu) {
         if (GetFlag(cpu, N) == 0) {
                 cpu->cycles++;
-                cpu->addr_abs = cpu->pc + cpu->addr_rel;
+                cpu->addrAbs = cpu->pc + cpu->addrRel;
 
-                if ((cpu->addr_abs & 0xFF00) != (cpu->pc & 0xFF00)) {
+                if ((cpu->addrAbs & 0xFF00) != (cpu->pc & 0xFF00)) {
                         cpu->cycles++;
                 }
 
-                cpu->pc = cpu->addr_abs;
+                cpu->pc = cpu->addrAbs;
         }
         return 0;
 }
@@ -753,13 +756,13 @@ uint8_t BRK(struct cpu*cpu) {
 uint8_t BVC(struct cpu *cpu) {
         if (GetFlag(cpu, V) == 0) {
                 cpu->cycles++;
-                cpu->addr_abs = cpu->pc + cpu->addr_rel;
+                cpu->addrAbs = cpu->pc + cpu->addrRel;
 
-                if ((cpu->addr_abs & 0xFF00) != (cpu->pc & 0xFF00)) {
+                if ((cpu->addrAbs & 0xFF00) != (cpu->pc & 0xFF00)) {
                         cpu->cycles++;
                 }
 
-                cpu->pc = cpu->addr_abs;
+                cpu->pc = cpu->addrAbs;
         }
         return 0;
 }
@@ -773,13 +776,13 @@ uint8_t BVC(struct cpu *cpu) {
 uint8_t BVS(struct cpu *cpu) {
         if (GetFlag(cpu, V) == 1) {
                 cpu->cycles++;
-                cpu->addr_abs = cpu->pc + cpu->addr_rel;
+                cpu->addrAbs = cpu->pc + cpu->addrRel;
 
-                if ((cpu->addr_abs & 0xFF00) != (cpu->pc & 0xFF00)) {
+                if ((cpu->addrAbs & 0xFF00) != (cpu->pc & 0xFF00)) {
                         cpu->cycles++;
                 }
 
-                cpu->pc = cpu->addr_abs;
+                cpu->pc = cpu->addrAbs;
         }
         return 0;
 }
@@ -880,7 +883,7 @@ uint8_t CPY(struct cpu *cpu) {
 uint8_t DEC(struct cpu *cpu) {
         uint8_t fetched = Fetch(cpu);
         uint16_t tmp = fetched - 1;
-        BusWrite(cpu->bus, cpu->addr_abs, tmp & 0x00FF);
+        BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
 
         SetFlag(cpu, Z, (tmp & 0x00FF) == 0x0000);
         SetFlag(cpu, N, tmp & 0x0080);
@@ -944,7 +947,7 @@ uint8_t EOR(struct cpu *cpu) {
 uint8_t INC(struct cpu *cpu) {
         uint8_t fetched = Fetch(cpu);
         uint16_t tmp = fetched + 1;
-        BusWrite(cpu->bus, cpu->addr_abs, tmp & 0x00FF);
+        BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
 
         SetFlag(cpu, Z, (tmp & 0x00FF) == 0x0000);
         SetFlag(cpu, N, tmp & 0x0080);
@@ -988,7 +991,7 @@ uint8_t INY(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This instruction will take no additional cycles
 uint8_t JMP(struct cpu *cpu) {
-        cpu->pc = cpu->addr_abs;
+        cpu->pc = cpu->addrAbs;
         return 0;
 }
 
@@ -1007,7 +1010,7 @@ uint8_t JSR(struct cpu *cpu) {
         BusWrite(cpu->bus, 0x0100 + cpu->sp, cpu->pc & 0x00FF);
         cpu->sp--;
 
-        cpu->pc = cpu->addr_abs;
+        cpu->pc = cpu->addrAbs;
         return 0;
 }
 
@@ -1070,7 +1073,7 @@ uint8_t LSR(struct cpu *cpu) {
         if (instruction_map[cpu->opcode].address == IMP)
                 cpu->a = tmp & 0x00FF;
         else
-                BusWrite(cpu->bus, cpu->addr_abs, tmp & 0x00FF);
+                BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
 
         return 0;
 }
@@ -1180,7 +1183,7 @@ uint8_t ROL(struct cpu *cpu) {
         if (instruction_map[cpu->opcode].address == IMP)
                 cpu->a = tmp & 0x00FF;
         else
-                BusWrite(cpu->bus, cpu->addr_abs, tmp & 0x00FF);
+                BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
 
         return 0;
 
@@ -1200,7 +1203,7 @@ uint8_t ROR(struct cpu *cpu) {
         if (instruction_map[cpu->opcode].address == IMP)
                 cpu->a = tmp & 0x00FF;
         else
-                BusWrite(cpu->bus, cpu->addr_abs, tmp & 0x00FF);
+                BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
 
         return 0;
 }
@@ -1279,7 +1282,7 @@ uint8_t SEI(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This instruction will take no additional cycles
 uint8_t STA(struct cpu *cpu) {
-        BusWrite(cpu->bus, cpu->addr_abs, cpu->a);
+        BusWrite(cpu->bus, cpu->addrAbs, cpu->a);
         return 0;
 }
 
@@ -1290,7 +1293,7 @@ uint8_t STA(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This instruction will take no additional cycles
 uint8_t STX(struct cpu *cpu) {
-        BusWrite(cpu->bus, cpu->addr_abs, cpu->x);
+        BusWrite(cpu->bus, cpu->addrAbs, cpu->x);
         return 0;
 }
 
@@ -1301,7 +1304,7 @@ uint8_t STX(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This instruction will take no additional cycles
 uint8_t STY(struct cpu *cpu) {
-        BusWrite(cpu->bus, cpu->addr_abs, cpu->y);
+        BusWrite(cpu->bus, cpu->addrAbs, cpu->y);
         return 0;
 }
 
@@ -1409,21 +1412,65 @@ void ToHexString(uint32_t n, uint8_t d, char *buf, uint8_t size) {
         buf[d] = '\0';
 }
 
-void DebugInstructionMapDeinit(struct debug_instruction_map *map) {
-        if (NULL == map) {
+
+//-- Debug Structures ----------------------------------------------------------
+
+
+char **CpuDebugStateInit(struct cpu *cpu) {
+        char **debug = (char **)malloc(sizeof(char *) * 7);
+
+        debug[0] = "        N V - B D I Z C";
+        debug[1] = malloc(strlen("status: 1 1 - 1 1 1 1 1") + 1);
+        sprintf(debug[1], "Status: %d %d - %d %d %d %d %d",
+                GetFlag(cpu, N),
+                GetFlag(cpu, V),
+                GetFlag(cpu, B),
+                GetFlag(cpu, D),
+                GetFlag(cpu, I),
+                GetFlag(cpu, Z),
+                GetFlag(cpu, C));
+
+        debug[2] = malloc(strlen("pc: $0000") + 1);
+        sprintf(debug[2], "PC: $%04X", cpu->pc);
+
+        debug[3] = malloc(strlen("a:  $00") + 1);
+        sprintf(debug[3], "A:  $%02X", cpu->a);
+
+        debug[4] = malloc(strlen("x:  $00") + 1);
+        sprintf(debug[4], "X:  $%02X", cpu->x);
+
+        debug[5] = malloc(strlen("y:  $00") + 1);
+        sprintf(debug[5], "Y:  $%02X", cpu->y);
+
+        debug[6] = malloc(strlen("sp: $0000") + 1);
+        sprintf(debug[6], "SP: $%04X", cpu->sp);
+
+        return debug;
+}
+
+void CpuDebugStateDeinit(char **debug) {
+        if (NULL == debug)
                 return;
-        }
 
-        if (NULL != map->map) {
-                free(map->map);
+        for (int i = 1; i < 7; i++) {
+                if (NULL == debug[i])
+                        continue;
+                free(debug[i]);
         }
-
-        free(map);
 }
 
 struct debug_instruction *DebugInstructionInit(uint16_t address, char *string, int length) {
         struct debug_instruction *self = (struct debug_instruction *)malloc(sizeof(struct debug_instruction));
+        if (NULL == self) {
+                return NULL;
+        }
+
         self->text = malloc(length);
+        if (NULL == self->text) {
+                free(self);
+                return NULL;
+        }
+
         strncpy(self->text, string, length);
         return self;
 }
@@ -1440,32 +1487,36 @@ void DebugInstructionDeinit(struct debug_instruction *self) {
         free(self);
 }
 
-int CpuIsComplete(struct cpu *cpu) {
-        return (0 == cpu->cycles);
-}
-
-struct debug_instruction_map *CpuDisassemble(struct cpu *cpu, uint16_t start, uint16_t stop) {
+struct disassembly *DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t stop) {
         int addr = start;
         uint8_t value = 0x00;
         uint8_t lo = 0x00;
         uint8_t hi = 0x00;
         uint16_t line_addr = 0;
 
-        struct debug_instruction_map *debug_map = (struct debug_instruction_map *)malloc(sizeof(struct debug_instruction_map));
-        debug_map->count = stop - start;
-        debug_map->map = (struct debug_instruction **)malloc(sizeof(struct debug_instruction *) * debug_map->count);
+        struct disassembly *disassembly = (struct disassembly *)malloc(sizeof(struct disassembly));
+        if (NULL == disassembly) {
+                return NULL;
+        }
 
-        char text[256] = { 0 };
-        char text_cpy[256] = { 0 };
-        uint8_t hex_buf_len = 5; // Space for terminating null.
-        char hex_buf[hex_buf_len];
-        uint16_t text_len = hex_buf_len; // Size adjusts as we construct string below.
+        disassembly->count = stop - start;
+        disassembly->map = (struct debug_instruction **)calloc(disassembly->count, sizeof(struct debug_instruction *));
+        if (NULL == disassembly->map) {
+                free(disassembly);
+                return NULL;
+        }
 
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wformat-truncation"
 
         int i = 0;
         while (addr <= stop) {
+                char text[256] = { 0 };
+                char text_cpy[256] = { 0 };
+                uint8_t hex_buf_len = 5; // Space for terminating null.
+                char hex_buf[hex_buf_len];
+                uint16_t text_len = hex_buf_len; // Size adjusts as we construct string below.
+
                 text_len = hex_buf_len; // Size adjusts as we construct string below.
                 line_addr = addr;
                 struct instruction instruction;
@@ -1559,54 +1610,37 @@ struct debug_instruction_map *CpuDisassemble(struct cpu *cpu, uint16_t start, ui
                         snprintf(text, 256, "%s$%s [$%s] {REL}", text_cpy, hex_buf, hex_buf2);
                 }
 
-                debug_map->map[i] = DebugInstructionInit(line_addr, text, strnlen(text, 256));
+                disassembly->map[i] = DebugInstructionInit(line_addr, text, strnlen(text, 256));
                 i++;
         }
 
         #pragma GCC diagnostic pop
 
-        return debug_map;
+        return disassembly;
 }
 
-char **CpuDebugState(struct cpu *cpu) {
-        char **debug = (char **)malloc(sizeof(char *) * 7);
-
-        debug[0] = "        N V - B D I Z C";
-        debug[1] = malloc(strlen("status: 1 1 - 1 1 1 1 1") + 1);
-        sprintf(debug[1], "Status: %d %d - %d %d %d %d %d",
-                GetFlag(cpu, N),
-                GetFlag(cpu, V),
-                GetFlag(cpu, B),
-                GetFlag(cpu, D),
-                GetFlag(cpu, I),
-                GetFlag(cpu, Z),
-                GetFlag(cpu, C));
-
-        debug[2] = malloc(strlen("pc: $0000") + 1);
-        sprintf(debug[2], "PC: $%04X", cpu->pc);
-
-        debug[3] = malloc(strlen("a:  $00") + 1);
-        sprintf(debug[3], "A:  $%02X", cpu->a);
-
-        debug[4] = malloc(strlen("x:  $00") + 1);
-        sprintf(debug[4], "X:  $%02X", cpu->x);
-
-        debug[5] = malloc(strlen("y:  $00") + 1);
-        sprintf(debug[5], "Y:  $%02X", cpu->y);
-
-        debug[6] = malloc(strlen("sp: $0000") + 1);
-        sprintf(debug[6], "SP: $%04X", cpu->sp);
-
-        return debug;
-}
-
-void CpuDebugStateDeinit(char **debug) {
-        if (NULL == debug)
+void DisassemblyDeinit(struct disassembly *disassembly) {
+        if (NULL == disassembly) {
                 return;
-
-        for (int i = 1; i < 7; i++) {
-                if (NULL == debug[i])
-                        continue;
-                free(debug[i]);
         }
+
+        if (NULL != disassembly->map) {
+                free(disassembly->map);
+        }
+
+        free(disassembly);
+}
+
+int DisassemblyFindPc(struct disassembly *disassembly, struct cpu *cpu) {
+        if (NULL == disassembly) return -1;
+        if (NULL == cpu) return -1;
+
+        for (int i = 0; i < disassembly->count; i++) {
+                if (NULL == disassembly || NULL == disassembly->map || NULL == disassembly->map[i]) continue;
+
+                unsigned long parsed = strtoul(&disassembly->map[i]->text[1], NULL, 16);
+                if ((uint16_t)parsed == cpu->pc) return i;
+        }
+
+        return -1;
 }
