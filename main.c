@@ -174,11 +174,11 @@ void DrawDisassembly(struct disassembly *disassembly, int x, int y, int numLines
 
         for (int i = min; i < max; i++) {
                 if (NULL == disassembly || NULL == disassembly->map || NULL == disassembly->map[i]) {
-                        GraphicsDrawLine(graphics, x, (y - FONT_SCALE) - (9 * i), x + 100, (y - 15) - (9 * i), ColorBlack.rgba);
+                        GraphicsDrawLine(graphics, x, (y - 25) - (9 * i), x + 100, (y - 15) - (9 * i), ColorBlack.rgba);
                 } else if (i == pc) {
-                        GraphicsDrawText(graphics, x, (y - FONT_SCALE) - (18 * i), disassembly->map[i]->text, 15, ColorBlue.rgba);
+                        GraphicsDrawText(graphics, x, (y - 25) - (18 * i), disassembly->map[i]->text, 15, ColorBlue.rgba);
                 } else {
-                        GraphicsDrawText(graphics, x, (y - FONT_SCALE) - (18 * i), disassembly->map[i]->text, 15, ColorBlack.rgba);
+                        GraphicsDrawText(graphics, x, (y - 25) - (18 * i), disassembly->map[i]->text, 15, ColorBlack.rgba);
                 }
         }
 }
