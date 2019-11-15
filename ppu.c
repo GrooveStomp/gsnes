@@ -291,3 +291,7 @@ int PpuIsFrameComplete(struct ppu *ppu) {
 void PpuResetFrameCompletion(struct ppu *ppu) {
         ppu->isFrameComplete = false;
 }
+
+struct sprite *PpuScreen(struct ppu *ppu) {
+        return ppu->screen;
+}

@@ -22,6 +22,7 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "external/stb_truetype.h"
 #include "graphics.h"
+#include "sprite.h"
 
 //! \brief A mostly generic implementation of swap
 //!
@@ -327,5 +328,27 @@ void GraphicsDrawText(struct graphics *graphics, int x, int y, char *string, int
                                 GraphicsPutPixel(graphics, x + xOffset + (w + x0), y - (h + y0), color);
                         }
                 }
+        }
+}
+
+void GraphicsDrawSprite(struct graphics *graphics, int x, int y, struct sprite *sprite, int scale) {
+        if (NULL == sprite) return;
+
+        if (scale > 1) {
+                for (int i = 0; i < sprite->width; i++)
+                        for (int j = 0; j < sprite->height; j++)
+                                for (int is = 0; is < scale; is++)
+                                        for (int js = 0; js < scale; js++) {
+                                                uint32_t color = SpriteGetPixel(sprite, i, j);
+                                                int xp = x + (i * scale) + is;
+                                                int yp = y + (j * scale) + js;
+                                                GraphicsPutPixel(graphics, xp, yp, color);
+                                        }
+        } else {
+                for (int i = 0; i < sprite->width; i++)
+                        for (int j = 0; j < sprite->height; j++) {
+                                uint32_t color = SpriteGetPixel(sprite, i, j);
+                                GraphicsPutPixel(graphics, x + i, y + j, color);
+                        }
         }
 }

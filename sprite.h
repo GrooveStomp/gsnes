@@ -16,8 +16,11 @@
 //! \file sprite.h
 #include <stdint.h>
 
-struct sprite;
-struct color;
+struct sprite {
+        uint32_t *pixels;
+        uint32_t width;
+        uint32_t height;
+};
 
 struct sprite *
 SpriteInit(unsigned int width, unsigned int height);
@@ -29,7 +32,7 @@ void
 SpriteSetPixel(struct sprite *sprite, unsigned int x, unsigned int y, uint32_t rgba);
 
 uint32_t
-SpriteSample(struct sprite *sprite, float x, float y);
+SpriteGetPixel(struct sprite *sprite, unsigned int x, unsigned int y);
 
-struct color *
-SpriteData(struct sprite *sprite);
+uint32_t
+SpriteSample(struct sprite *sprite, float x, float y);

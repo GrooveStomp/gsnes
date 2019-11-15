@@ -19,6 +19,8 @@
 #ifndef GRAPHICS_VERSION
 #define GRAPHICS_VERSION "0.2-gstxt" //!< include guard and version info
 
+struct sprite;
+
 //! \brief Creates and initializes new graphics state.
 //!
 //! \param[in] title The title displayed in the window titlebar
@@ -103,5 +105,15 @@ GraphicsDrawText(struct graphics *graphics, int x, int y, char *string, int font
 //! \param[in] color 32-bit color (R|G|B|A) to render line with
 void
 GraphicsDrawLine(struct graphics *graphics, int x1, int y1, int x2, int y2, uint32_t color);
+
+//! \brief Draws a sprite starting with lower left corner at (x,y)
+//!
+//! \param[in,out] graphics
+//! \param[in] x x coordinate to start drawing from
+//! \param[in] y y coordinate to start drawing from
+//! \param[in] sprite sprite to draw
+//! \param[in] scale integer scale of sprite
+void
+GraphicsDrawSprite(struct graphics *graphics, int x, int y, struct sprite *sprite, int scale);
 
 #endif // GRAPHICS_VERSION

@@ -46,10 +46,14 @@
  NOP
  NOP
 */
-static char *program = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
+static const char *program = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
 
-static int WIDTH = 1200;
-static int HEIGHT = 800;
+static const int FONT_SCALE = 25;
+
+static const int NES_SCREEN_WIDTH = 256 * 3;
+static const int NES_SCREEN_HEIGHT = 240 * 3;
+static const int WIDTH = NES_SCREEN_WIDTH + 250;
+static const int HEIGHT = NES_SCREEN_HEIGHT;
 
 static struct cpu *cpu = NULL;
 static struct ppu *ppu = NULL;
@@ -148,7 +152,7 @@ void LoadRom(struct bus *bus, char *data) {
 }
 
 void DrawCpuState(int x, int y) {
-        GraphicsDrawText(graphics, x, y, "CPU State", 25, 0x000000FF);
+        GraphicsDrawText(graphics, x, y, "CPU State", FONT_SCALE, 0x000000FF);
         char **cpu_state = CpuDebugStateInit(cpu);
         for (int i = 0; i < 7; i++) {
                 GraphicsDrawText(graphics, x, (y - 20) - (18 * i), cpu_state[i], 15, 0x000000FF);
@@ -157,7 +161,7 @@ void DrawCpuState(int x, int y) {
 }
 
 void DrawDisassembly(struct disassembly *disassembly, int x, int y, int numLines) {
-        GraphicsDrawText(graphics, x, y, "Disassembly", 25, 0x000000FF);
+        GraphicsDrawText(graphics, x, y, "Disassembly", FONT_SCALE, 0x000000FF);
 
         int pc = DisassemblyFindPc(disassembly, cpu);
 
@@ -170,11 +174,11 @@ void DrawDisassembly(struct disassembly *disassembly, int x, int y, int numLines
 
         for (int i = min; i < max; i++) {
                 if (NULL == disassembly || NULL == disassembly->map || NULL == disassembly->map[i]) {
-                        GraphicsDrawLine(graphics, x, (y - 25) - (9 * i), x + 100, (y - 15) - (9 * i), ColorBlack.rgba);
+                        GraphicsDrawLine(graphics, x, (y - FONT_SCALE) - (9 * i), x + 100, (y - 15) - (9 * i), ColorBlack.rgba);
                 } else if (i == pc) {
-                        GraphicsDrawText(graphics, x, (y - 25) - (18 * i), disassembly->map[i]->text, 15, ColorBlue.rgba);
+                        GraphicsDrawText(graphics, x, (y - FONT_SCALE) - (18 * i), disassembly->map[i]->text, 15, ColorBlue.rgba);
                 } else {
-                        GraphicsDrawText(graphics, x, (y - 25) - (18 * i), disassembly->map[i]->text, 15, ColorBlack.rgba);
+                        GraphicsDrawText(graphics, x, (y - FONT_SCALE) - (18 * i), disassembly->map[i]->text, 15, ColorBlack.rgba);
                 }
         }
 }
@@ -190,7 +194,7 @@ int main(int argc, char **argv) {
         BusWrite(bus, 0xFFFD, 0x80);
 
         // Disassemble
-        struct disassembly *disassembly = DisassemblyInit(cpu, 0x0000, 0x00FF);
+        struct disassembly *disassembly = DisassemblyInit(cpu, 0x00000, 0x00FF);
 
         struct timespec frameEnd;
         struct timespec frameStart;
@@ -247,11 +251,13 @@ int main(int argc, char **argv) {
                 if (InputIsKeyPressed(input, KEY_SPACE)) isEmulating = !isEmulating;
                 if (InputIsKeyPressed(input, KEY_R)) BusReset(bus);
 
-                GraphicsDrawLine(graphics, 811, 0, 811, 800, 0x000000FF);
-                DrawCpuState(820, 775);
+                GraphicsDrawLine(graphics, NES_SCREEN_WIDTH, 0, NES_SCREEN_WIDTH, HEIGHT, 0x000000FF);
+                DrawCpuState(NES_SCREEN_WIDTH + 10, HEIGHT - 30);
 
-                GraphicsDrawLine(graphics, 811, 630, 1200, 630, 0x000000FF);
-                DrawDisassembly(disassembly, 820, 600, 25);
+                GraphicsDrawLine(graphics, NES_SCREEN_WIDTH, HEIGHT - 175, WIDTH, HEIGHT - 175, 0x000000FF);
+                DrawDisassembly(disassembly, NES_SCREEN_WIDTH + 10, HEIGHT - 175 - 30, 25);
+
+                GraphicsDrawSprite(graphics, 0, 0, PpuScreen(ppu), 3);
 
                 GraphicsEnd(graphics);
         }

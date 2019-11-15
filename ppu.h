@@ -19,6 +19,7 @@
 
 struct ppu;
 struct cart;
+struct sprite;
 
 struct ppu *
 PpuInit();
@@ -40,5 +41,8 @@ PpuIsFrameComplete(struct ppu *ppu);
 
 void
 PpuResetFrameCompletion(struct ppu *ppu);
+
+struct sprite *
+PpuScreen(struct ppu *ppu);
 
 #endif // PPU_VERSION

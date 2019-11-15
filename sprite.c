@@ -20,19 +20,13 @@
 #include "sprite.h"
 #include "color.h"
 
-struct sprite {
-        struct color *pixels;
-        uint32_t width;
-        uint32_t height;
-};
-
 struct sprite *SpriteInit(unsigned int width, unsigned int height) {
         struct sprite *sprite = (struct sprite *)malloc(sizeof(struct sprite));
         if (NULL == sprite) {
                 return NULL;
         }
 
-        sprite->pixels = (struct color *)malloc(sizeof(struct color) * width * height);
+        sprite->pixels = (uint32_t *)calloc(width * height, sizeof(uint32_t));
         if (NULL == sprite->pixels) {
                 free(sprite);
                 return NULL;
@@ -59,8 +53,15 @@ void SpriteDeinit(struct sprite *sprite) {
 
 void SpriteSetPixel(struct sprite *sprite, unsigned int x, unsigned int y, uint32_t rgba) {
         if (x >= 0 && x < sprite->width && y >= 0 && y < sprite->height) {
-                sprite->pixels[y * sprite->width + x] = ColorInitInt(rgba);
+                sprite->pixels[y * sprite->width + x] = rgba;
         }
+}
+
+uint32_t SpriteGetPixel(struct sprite *sprite, unsigned int x, unsigned int y) {
+        if (x >= 0 && x < sprite->width && y >= 0 && y < sprite->height) {
+                return sprite->pixels[y * sprite->width + x];
+        }
+        return ColorBlack.rgba;
 }
 
 uint32_t SpriteSample(struct sprite *sprite, float x, float y) {
@@ -68,12 +69,8 @@ uint32_t SpriteSample(struct sprite *sprite, float x, float y) {
         int32_t sy = fminf(y * (float)sprite->height, sprite->height - 1);
 
         if (sx >= 0 && sx < sprite->width && sy >= 0 && sy < sprite->height) {
-                return sprite->pixels[sy * sprite->width + sx].rgba;
+                return sprite->pixels[sy * sprite->width + sx];
         }
 
-        return ColorInitFloats(0, 0, 0, 0).rgba;
-}
-
-struct color *SpriteData(struct sprite *sprite) {
-        return sprite->pixels;
+        return ColorBlack.rgba;
 }
