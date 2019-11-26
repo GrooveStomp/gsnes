@@ -4,7 +4,7 @@
 
   File: util.h
   Created: 2019-11-03
-  Updated: 2019-11-03
+  Updated: 2019-11-21
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -32,5 +32,25 @@
 #define KB_AS_B(x) (x) * 1024
 #define MB_AS_B(x) KB((x)) * 1024
 #define GB_AS_B(x) MB((x)) * 1024
+
+//! \brief A mostly generic implementation of swap
+//!
+//! Both v1 and v2 must point to data that is the same size, as specified in the
+//! size parameter.
+//!
+//! \param[in,out] v1 first value
+//! \param[in,out] v2 second value
+//! \param[in] size v1 and v2 must each be this size
+void
+SwapGeneric(void *v1, void *v2, size_t size);
+
+//! \brief convert number to hexadecimal string
+//!
+//! \param[in] hex number to stringify
+//! \param[in] nibbles number of nibbles in data source
+//! \param[in,out] buf pre-allocated char buffer
+//! \param[in] size size of buf
+void
+HexToString(uint32_t hex, uint8_t nibbles, char *buf, uint8_t size);
 
 #endif // UTIL_VERSION

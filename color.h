@@ -4,7 +4,7 @@
 
   File: color.h
   Created: 2019-08-15
-  Updated: 2019-11-05
+  Updated: 2019-11-15
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
@@ -105,5 +105,6 @@ extern struct color ColorPurple;
 extern struct color ColorYellow;
 extern struct color ColorCyan;
 extern struct color ColorPink;
+extern struct color ColorGray;
 
 #endif // COLOR_VERSION

@@ -4,7 +4,7 @@
 
   File: sprite.c
   Created: 2019-11-05
-  Updated: 2019-11-05
+  Updated: 2019-11-14
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 

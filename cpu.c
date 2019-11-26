@@ -5,7 +5,7 @@
 
   File: cpu.c
   Created: 2019-10-16
-  Updated: 2019-11-05
+  Updated: 2019-11-26
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -22,6 +22,7 @@
 
 #include "cpu.h"
 #include "bus.h"
+#include "util.h"
 
 // Addressing Modes
 uint8_t ABS(struct cpu *cpu);
@@ -227,7 +228,7 @@ void Irq(struct cpu *cpu) {
         }
 }
 
-void Nmi(struct cpu *cpu) {
+void CpuNmi(struct cpu *cpu) {
         BusWrite(cpu->bus, 0x0100 + cpu->sp, (cpu->pc >> 8) & 0x00FF);
         cpu->sp--;
         BusWrite(cpu->bus, 0x0100 + cpu->sp, cpu->pc & 0x00FF);
@@ -1391,28 +1392,6 @@ uint8_t XXX(struct cpu *cpu) {
 }
 
 
-//-- Helper Functions ----------------------------------------------------------
-
-
-//! \brief convert number to hexadecimal string
-//!
-//! \param[in] n number to convert to hex
-//! \param[in] d number of nibbles in data source
-//! \param[in,out] buf pre-allocated char buffer
-//! \param[in] size size of buf
-void ToHexString(uint32_t n, uint8_t d, char *buf, uint8_t size) {
-        if (d > size) {
-                d = size;
-        }
-
-        for (int i = d - 1; i >= 0; i--, n >>= 4) {
-                buf[i] = "0123456789ABCDEF"[n & 0xF];
-        }
-
-        buf[d] = '\0';
-}
-
-
 //-- Debug Structures ----------------------------------------------------------
 
 
@@ -1421,6 +1400,10 @@ char **CpuDebugStateInit(struct cpu *cpu) {
 
         debug[0] = "        N V - B D I Z C";
         debug[1] = malloc(strlen("status: 1 1 - 1 1 1 1 1") + 1);
+
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wformat-overflow"
+
         sprintf(debug[1], "Status: %d %d - %d %d %d %d %d",
                 GetFlag(cpu, N),
                 GetFlag(cpu, V),
@@ -1429,6 +1412,8 @@ char **CpuDebugStateInit(struct cpu *cpu) {
                 GetFlag(cpu, I),
                 GetFlag(cpu, Z),
                 GetFlag(cpu, C));
+
+        #pragma GCC diagnostic pop
 
         debug[2] = malloc(strlen("pc: $0000") + 1);
         sprintf(debug[2], "PC: $%04X", cpu->pc);
@@ -1522,7 +1507,7 @@ struct disassembly *DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t st
                 struct instruction instruction;
 
                 // Prefix instruction with address.
-                ToHexString(addr, 4, hex_buf, hex_buf_len);
+                HexToString(addr, 4, hex_buf, hex_buf_len);
                 text_len += 3; // Adding $, <colon> and <space>
                 snprintf(text, text_len, "$%s: ", hex_buf);
                 strncpy(text_cpy, text, strnlen(text, text_len) + 1);
@@ -1540,73 +1525,73 @@ struct disassembly *DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t st
                 } else if (IMM == instruction.address) {
                         value = BusRead(cpu->bus, addr);
                         addr++;
-                        ToHexString(value, 2, hex_buf, hex_buf_len);
+                        HexToString(value, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s#$%s {IMM}", text_cpy, hex_buf);
                 } else if (ZP0 == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = 0x00;
-                        ToHexString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s {ZP0}", text_cpy, hex_buf);
                 } else if (ZPX == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = 0x00;
-                        ToHexString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s, X {ZPX}", text_cpy, hex_buf);
                 } else if (ZPY == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = 0x00;
-                        ToHexString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s, Y {ZPY}", text_cpy, hex_buf);
                 } else if (IZX == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = 0x00;
-                        ToHexString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s($%s, X) {IZX}", text_cpy, hex_buf);
                 } else if (IZY == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = 0x00;
-                        ToHexString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s($%s, Y) {IZY}", text_cpy, hex_buf);
                 } else if (ABS == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = BusRead(cpu->bus, addr);
                         addr++;
-                        ToHexString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
+                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s {ABS}", text_cpy, hex_buf);
                 } else if (ABX == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = BusRead(cpu->bus, addr);
                         addr++;
-                        ToHexString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
+                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s, X {ABX}", text_cpy, hex_buf);
                 } else if (ABY == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = BusRead(cpu->bus, addr);
                         addr++;
-                        ToHexString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
+                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s, Y {ABY}", text_cpy, hex_buf);
                 } else if (IND == instruction.address) {
                         lo = BusRead(cpu->bus, addr);
                         addr++;
                         hi = BusRead(cpu->bus, addr);
                         addr++;
-                        ToHexString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
+                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s($%s) {IND}", text_cpy, hex_buf);
                 } else if (REL == instruction.address) {
                         value = BusRead(cpu->bus, addr);
                         addr++;
-                        ToHexString(value, 2, hex_buf, hex_buf_len);
+                        HexToString(value, 2, hex_buf, hex_buf_len);
 
                         char hex_buf2[5];
-                        ToHexString(addr + (int8_t)value, 4, hex_buf2, hex_buf_len);
+                        HexToString(addr + (int8_t)value, 4, hex_buf2, hex_buf_len);
                         snprintf(text, 256, "%s$%s [$%s] {REL}", text_cpy, hex_buf, hex_buf2);
                 }
 
@@ -1636,10 +1621,10 @@ int DisassemblyFindPc(struct disassembly *disassembly, struct cpu *cpu) {
         if (NULL == cpu) return -1;
 
         for (int i = 0; i < disassembly->count; i++) {
-                if (NULL == disassembly || NULL == disassembly->map || NULL == disassembly->map[i]) continue;
+                if (NULL == disassembly->map || NULL == disassembly->map[i]) continue;
 
                 unsigned long parsed = strtoul(&disassembly->map[i]->text[1], NULL, 16);
-                if ((uint16_t)parsed == cpu->pc) return i;
+                if ((uint16_t)parsed == cpu->pc || (uint16_t)parsed == cpu->pc - 1) return i;
         }
 
         return -1;

@@ -4,7 +4,7 @@
 
   File: cart.h
   Created: 2019-11-03
-  Updated: 2019-11-03
+  Updated: 2019-11-21
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -21,6 +21,13 @@
 #define CART_VERSION "0.1-gsnes"
 
 struct cart;
+
+enum mirror {
+        MIRROR_HORIZONTAL,
+        MIRROR_VERTICAL,
+        MIRROR_ONESCREEN_LO,
+        MIRROR_ONESCREEN_HI,
+};
 
 struct cart *
 CartInit();
@@ -39,5 +46,8 @@ CartPpuRead(struct cart *cart, uint16_t addr, uint8_t *data);
 
 bool
 CartPpuWrite(struct cart *cart, uint16_t addr, uint8_t data);
+
+enum mirror
+CartMirroring(struct cart *cart);
 
 #endif // CART_VERSION

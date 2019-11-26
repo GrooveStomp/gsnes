@@ -4,7 +4,7 @@
 
   File: mapper.h
   Created: 2019-11-04
-  Updated: 2019-11-04
+  Updated: 2019-11-09
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 

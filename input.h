@@ -4,7 +4,7 @@
 
   File: input.h
   Created: 2019-07-21
-  Updated: 2019-11-09
+  Updated: 2019-11-26
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
@@ -17,6 +17,14 @@
 
 #ifndef INPUT_VERSION
 #define INPUT_VERSION "0.2-gsnes" //!< include guard and version info
+
+#include <stdbool.h>
+
+struct button_state {
+        bool pressed;
+        bool released;
+        bool held;
+};
 
 struct input;
 
@@ -92,10 +100,14 @@ enum input_key_enum {
         KEY_7,
         KEY_8,
         KEY_9,
-        KEY_0
+        KEY_0,
+        KEY_COUNT
 };
 
 unsigned int
 InputIsKeyPressed(struct input *input, enum input_key_enum e);
+
+struct button_state
+InputGetKey(struct input *input, enum input_key_enum e);
 
 #endif // INPUT_VERSION

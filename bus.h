@@ -4,7 +4,7 @@
 
   File: bus.h
   Created: 2019-10-16
-  Updated: 2019-10-17
+  Updated: 2019-11-19
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -22,6 +22,7 @@
 struct cpu;
 struct bus;
 struct ppu;
+struct cart;
 
 struct bus *
 BusInit(struct cpu *cpu, struct ppu *ppu);
@@ -46,6 +47,10 @@ BusReset(struct bus *bus);
 //! clocks.
 //!
 //! \param[in,out] bus
-void BusTick(struct bus *bus);
+void
+BusTick(struct bus *bus);
+
+void
+BusAttachCart(struct bus *bus, struct cart *cart);
 
 #endif // BUS_VERSION

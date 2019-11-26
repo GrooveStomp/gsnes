@@ -4,7 +4,7 @@
 
   File: color.c
   Created: 2019-08-15
-  Updated: 2019-11-05
+  Updated: 2019-11-15
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
@@ -25,6 +25,7 @@ struct color ColorPurple = { 0x7F00FFFF };
 struct color ColorYellow = { 0xFFFF00FF };
 struct color ColorCyan = { 0x00FFFFFF };
 struct color ColorPink = { 0xFF00FFFF };
+struct color ColorGray = { 0x888888FF };
 
 void ColorSetInt(struct color *color, char component, unsigned int value) {
         unsigned int pos = 0;

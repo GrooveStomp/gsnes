@@ -4,7 +4,7 @@
 
   File: graphics.c
   Created: 2019-06-25
-  Updated: 2019-11-07
+  Updated: 2019-11-19
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
@@ -23,22 +23,6 @@
 #include "external/stb_truetype.h"
 #include "graphics.h"
 #include "sprite.h"
-
-//! \brief A mostly generic implementation of swap
-//!
-//! Both v1 and v2 must point to data that is the same size, as specified in the
-//! size parameter.
-//!
-//! \param[in,out] v1 first value
-//! \param[in,out] v2 second value
-//! \param[in] size v1 and v2 must each be this size
-//!
-void swap_generic(void *v1, void *v2, size_t size) {
-        char temp[size];
-        memmove(temp, v1, size);
-        memmove(v1, v2, size);
-        memmove(v2, temp, size);
-}
 
 //! \brief graphics state
 struct graphics {
@@ -125,7 +109,7 @@ void GraphicsEnd(struct graphics *graphics) {
 
 void GraphicsClearScreen(struct graphics *graphics, uint32_t color) {
         for (int i = 0; i < graphics->bytesPerRow * graphics->height; i+=4) {
-                unsigned int *pixel = (unsigned int *)&graphics->pixels[i];
+                unsigned int *pixel = (uint32_t *)&graphics->pixels[i];
                 *pixel = color;
         }
 }
@@ -351,4 +335,30 @@ void GraphicsDrawSprite(struct graphics *graphics, int x, int y, struct sprite *
                                 GraphicsPutPixel(graphics, x + i, y + j, color);
                         }
         }
+}
+
+void GraphicsDrawFilledRect(struct graphics *graphics, int x, int y, int w, int h, uint32_t color) {
+        int x2 = x + w;
+        int y2 = y + h;
+
+        if (x < 0) x = 0;
+        if (x >= graphics->width) x = graphics->width;
+        if (y < 0) y = 0;
+        if (y >= graphics->height) y = graphics->height;
+
+        if (x2 < 0) x2 = 0;
+        if (x2 >= graphics->width) x2 = graphics->width;
+        if (y2 < 0) y2 = 0;
+        if (y2 >= graphics->height) y2 = graphics->height;
+
+        for (int i = x; i < x2; i++)
+                for (int j = y; j < y2; j++)
+                        GraphicsPutPixel(graphics, i, j, color);
+}
+
+void GraphicsDrawRect(struct graphics *graphics, int x, int y, int w, int h, uint32_t color) {
+        GraphicsDrawLine(graphics, x, y, x + w, y, color);
+        GraphicsDrawLine(graphics, x + w, y, x + w, y + h, color);
+        GraphicsDrawLine(graphics, x + w, y + h, x, y + h, color);
+        GraphicsDrawLine(graphics, x, y + h, x, y, color);
 }

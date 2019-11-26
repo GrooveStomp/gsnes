@@ -4,7 +4,7 @@
 
   File: main.c
   Created: 2019-10-31
-  Updated: 2019-10-31
+  Updated: 2019-11-26
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -19,47 +19,30 @@
 #include <string.h> // strlen
 #include <stdio.h> // printf
 
-#include "cpu.h"
 #include "bus.h"
-#include "ppu.h"
+#include "cart.h"
+#include "color.h"
+#include "cpu.h"
 #include "graphics.h"
 #include "input.h"
+#include "ppu.h"
 #include "util.h"
-#include "color.h"
 
-// Load Program (assembled at https://www.masswerk.at/6502/assembler.html)
-/*
- *=$8000
- LDX #10
- STX $0000
- LDX #3
- STX $0001
- LDY $0000
- LDA #0
- CLC
- loop
- ADC $0001
- DEY
- BNE loop
- STA $0002
- NOP
- NOP
- NOP
-*/
-static const char *program = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
-
-static const int FONT_SCALE = 25;
+static const int FONT_HEADER_SCALE = 20;
+static const int FONT_SCALE = 15;
 
 static const int NES_SCREEN_WIDTH = 256 * 3;
 static const int NES_SCREEN_HEIGHT = 240 * 3;
 static const int WIDTH = NES_SCREEN_WIDTH + 250;
 static const int HEIGHT = NES_SCREEN_HEIGHT;
+static const int SWATCH_SIZE = 5;
 
 static struct cpu *cpu = NULL;
 static struct ppu *ppu = NULL;
 static struct bus *bus = NULL;
 static struct input *input = NULL;
 static struct graphics *graphics = NULL;
+static struct cart *cart = NULL;
 static char *font_buffer = NULL;
 
 void Deinit(int code) {
@@ -75,12 +58,20 @@ void Deinit(int code) {
                 BusDeinit(bus);
         if (NULL != cpu)
                 CpuDeinit(cpu);
+        if (NULL != cart)
+                CartDeinit(cart);
 
         exit(code);
 }
 
 void Init() {
         char *ttf_filename = "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf";
+
+        cart = CartInit("nestest.nes");
+        if (NULL == cart) {
+                fprintf(stderr, "Couldn't load cart");
+                Deinit(1);
+        }
 
         cpu = CpuInit();
         if (NULL == cpu) {
@@ -139,46 +130,36 @@ void Init() {
         GraphicsInitText(graphics, (unsigned char *)font_buffer);
 }
 
-void LoadRom(struct bus *bus, char *data) {
-        uint16_t ram_offset = 0;
-        char *last_byte = NULL;
-
-        unsigned long i = strtoul(data, &last_byte, 16);
-        while (data != last_byte) {
-                BusWrite(bus, ram_offset++, (uint8_t)i);
-                data = last_byte;
-                i = strtoul(data, &last_byte, 16);
-        }
-}
-
 void DrawCpuState(int x, int y) {
-        GraphicsDrawText(graphics, x, y, "CPU State", FONT_SCALE, 0x000000FF);
+        GraphicsDrawText(graphics, x, y, "CPU State", FONT_HEADER_SCALE, 0x000000FF);
         char **cpu_state = CpuDebugStateInit(cpu);
         for (int i = 0; i < 7; i++) {
-                GraphicsDrawText(graphics, x, (y - 20) - (18 * i), cpu_state[i], 15, 0x000000FF);
+                GraphicsDrawText(graphics, x, (y - 15) - (18 * i), cpu_state[i], FONT_SCALE, 0x000000FF);
         }
         CpuDebugStateDeinit(cpu_state);
 }
 
 void DrawDisassembly(struct disassembly *disassembly, int x, int y, int numLines) {
-        GraphicsDrawText(graphics, x, y, "Disassembly", FONT_SCALE, 0x000000FF);
+        if (NULL == disassembly) return;
+
+        GraphicsDrawText(graphics, x, y, "Disassembly", FONT_HEADER_SCALE, 0x000000FF);
 
         int pc = DisassemblyFindPc(disassembly, cpu);
 
         int halfLines = (int)(0.5f * (float)numLines);
         int min = pc - halfLines;
-        if (min < 0 || min > 0xFFFF) min = 0;
-
         int max = pc + halfLines;
-        if (max > 0xFFFF || max < 0) max = 0xFFFF;
 
-        for (int i = min; i < max; i++) {
-                if (NULL == disassembly || NULL == disassembly->map || NULL == disassembly->map[i]) {
-                        GraphicsDrawLine(graphics, x, (y - 25) - (9 * i), x + 100, (y - 15) - (9 * i), ColorBlack.rgba);
+        for (int i = min, si = 0; i < max; i++, si++) {
+                int yOff = (y - 25) - (18 * si);
+                if (i < 0 || i > 0xFFFF) {
+                        GraphicsDrawLine(graphics, x, yOff + 5 , x + 230, yOff + 5, ColorRed.rgba);
+                } else if (NULL == disassembly->map || NULL == disassembly->map[i]) {
+                        GraphicsDrawLine(graphics, x, yOff + 5 , x + 230, yOff + 5, ColorGray.rgba);
                 } else if (i == pc) {
-                        GraphicsDrawText(graphics, x, (y - 25) - (18 * i), disassembly->map[i]->text, 15, ColorBlue.rgba);
+                        GraphicsDrawText(graphics, x, yOff, disassembly->map[i]->text, FONT_SCALE, ColorBlue.rgba);
                 } else {
-                        GraphicsDrawText(graphics, x, (y - 25) - (18 * i), disassembly->map[i]->text, 15, ColorBlack.rgba);
+                        GraphicsDrawText(graphics, x, yOff, disassembly->map[i]->text, FONT_SCALE, ColorBlack.rgba);
                 }
         }
 }
@@ -187,14 +168,14 @@ int main(int argc, char **argv) {
         Init();
 
         CpuConnectBus(cpu, bus);
-        LoadRom(bus, program);
+        BusAttachCart(bus, cart);
 
         // Set reset vector.
         BusWrite(bus, 0xFFFC, 0x00);
         BusWrite(bus, 0xFFFD, 0x80);
 
         // Disassemble
-        struct disassembly *disassembly = DisassemblyInit(cpu, 0x00000, 0x00FF);
+        struct disassembly *disassembly = DisassemblyInit(cpu, 0x0000, 0xFFFF);
 
         struct timespec frameEnd;
         struct timespec frameStart;
@@ -203,6 +184,7 @@ int main(int argc, char **argv) {
         double residualTime = 0.0;
         int isEmulating = 1;
         int isRunning = 1;
+        int selectedPalette = 0;
         while (isRunning) {
                 clock_gettime(CLOCK_REALTIME, &frameEnd);
                 double elapsedTime = S_AS_MS(frameEnd.tv_sec - frameStart.tv_sec);
@@ -210,6 +192,9 @@ int main(int argc, char **argv) {
 
                 GraphicsBegin(graphics);
                 GraphicsClearScreen(graphics, 0xFFFFFFFF);
+
+                InputProcess(input);
+                isRunning = !InputIsQuitRequested(input);
 
                 if (isEmulating) {
                         if (0.0f < residualTime) {
@@ -245,19 +230,44 @@ int main(int argc, char **argv) {
                         }
                 }
 
-                InputProcess(input);
-                isRunning = !InputIsQuitRequested(input);
+                if (InputGetKey(input, KEY_SPACE).pressed) isEmulating = !isEmulating;
+                if (InputGetKey(input, KEY_R).pressed) BusReset(bus);
+                if (InputGetKey(input, KEY_P).pressed) {
+                        ++selectedPalette;
+                        selectedPalette &= 0x07;
+                }
 
-                if (InputIsKeyPressed(input, KEY_SPACE)) isEmulating = !isEmulating;
-                if (InputIsKeyPressed(input, KEY_R)) BusReset(bus);
+                GraphicsDrawLine(graphics, NES_SCREEN_WIDTH, 0, NES_SCREEN_WIDTH, HEIGHT, ColorBlack.rgba);
+                DrawCpuState(NES_SCREEN_WIDTH + 10, HEIGHT - (FONT_HEADER_SCALE + 5));
 
-                GraphicsDrawLine(graphics, NES_SCREEN_WIDTH, 0, NES_SCREEN_WIDTH, HEIGHT, 0x000000FF);
-                DrawCpuState(NES_SCREEN_WIDTH + 10, HEIGHT - 30);
+                GraphicsDrawLine(graphics, NES_SCREEN_WIDTH, HEIGHT - 160, WIDTH, HEIGHT - 160, ColorBlack.rgba);
+                DrawDisassembly(disassembly, NES_SCREEN_WIDTH + 10, HEIGHT - 160 - (FONT_HEADER_SCALE + 5), 20);
 
-                GraphicsDrawLine(graphics, NES_SCREEN_WIDTH, HEIGHT - 175, WIDTH, HEIGHT - 175, 0x000000FF);
-                DrawDisassembly(disassembly, NES_SCREEN_WIDTH + 10, HEIGHT - 175 - 30, 25);
+                // Iterate through each palette.
+                for (int p = 0; p < 8; p++)
+                        for (int s = 0; s < 4; s++) {
+                                struct color *color = PpuGetColorFromPaletteRam(ppu, p, s);
+                                int x = NES_SCREEN_WIDTH + 1 + (p * 5 * (SWATCH_SIZE + 1)) + (s * (SWATCH_SIZE + 1));
+                                int y = NES_SCREEN_HEIGHT - 590;
+                                GraphicsDrawFilledRect(graphics, x, y, SWATCH_SIZE, SWATCH_SIZE, color->rgba);
+                        }
+
+                // Draw selection reticule around selected palette.
+                GraphicsDrawRect(graphics, NES_SCREEN_WIDTH + (selectedPalette * 5 * (SWATCH_SIZE + 1)), NES_SCREEN_HEIGHT - 591, SWATCH_SIZE * 4 + 4, SWATCH_SIZE + 1, ColorBlack.rgba);
+
+                // Draw the pattern tables.
+                GraphicsDrawSprite(graphics, NES_SCREEN_WIDTH, HEIGHT - 719, PpuGetPatternTable(ppu, 0, selectedPalette), 1);
+                GraphicsDrawSprite(graphics, NES_SCREEN_WIDTH + 129, HEIGHT - 719, PpuGetPatternTable(ppu, 1, selectedPalette), 1);
 
                 GraphicsDrawSprite(graphics, 0, 0, PpuScreen(ppu), 3);
+
+                /* for (int y = 0; y < 30; y++) { */
+                /*         for (int x = 0; x < 32; x++) { */
+                /*                 char buf[5]; */
+                /*                 //HexToString(PpuNameTableEntry(ppu, 0)[y * 32 + x], 2, buf, 5); */
+                /*                 //GraphicsDrawText(graphics, x * 16, y * 16, buf, 15, ColorBlack.rgba); */
+                /*         } */
+                /* } */
 
                 GraphicsEnd(graphics);
         }

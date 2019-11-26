@@ -1,0 +1,12 @@
+- Emulation isn't working.
+  SP seems to be changing, but nothing else?
+
+- Fuzzy font rendering.
+  Font overdraw? Improper buffer clearing?
+
+- Double-rendering for text.
+  For invalid disassembly lines draw a red line and see red show through other spots where text is rendered.
+  This may be the same bug as the fuzzy font rendering.
+
+- Rendering CPU state includes garbage after valid string.
+  I think the string capacity is specified incorrectly and/or there is a missing null character.

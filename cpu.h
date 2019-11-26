@@ -4,7 +4,7 @@
 
   File: cpu.h
   Created: 2019-10-16
-  Updated: 2019-10-31
+  Updated: 2019-11-21
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -39,6 +39,9 @@ CpuTick(struct cpu *cpu);
 
 int
 CpuIsComplete(struct cpu *cpu);
+
+void
+CpuNmi(struct cpu *cpu);
 
 //-- Debug ---------------------------------------------------------------------
 

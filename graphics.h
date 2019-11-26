@@ -1,10 +1,10 @@
 /******************************************************************************
-  GrooveStomp's Text Renderer
+  GrooveStomp's NES Emulator
   Copyright (c) 2019 Aaron Oman (GrooveStomp)
 
   File: graphics.h
   Created: 2019-07-16
-  Updated: 2019-11-07
+  Updated: 2019-11-19
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
@@ -17,7 +17,7 @@
 #include <stdint.h>
 
 #ifndef GRAPHICS_VERSION
-#define GRAPHICS_VERSION "0.2-gstxt" //!< include guard and version info
+#define GRAPHICS_VERSION "0.2-gsnes" //!< include guard and version info
 
 struct sprite;
 
@@ -115,5 +115,27 @@ GraphicsDrawLine(struct graphics *graphics, int x1, int y1, int x2, int y2, uint
 //! \param[in] scale integer scale of sprite
 void
 GraphicsDrawSprite(struct graphics *graphics, int x, int y, struct sprite *sprite, int scale);
+
+//! \brief Draws a filled rectangle at (x,y) of width w and height h
+//!
+//! \param[in,out] graphics
+//! \param[in] x lower left corner x coordinate
+//! \param[in] y lower left corner y coordinate
+//! \param[in] w width of the rectangle in pixels
+//! \param[in] h height of the rectangle in pixels
+//! \param[in] color 32-bit color (R|G|B|A) to render line with
+void
+GraphicsDrawFilledRect(struct graphics *graphics, int x, int y, int w, int h, uint32_t color);
+
+//! \brief Draws a rectangle outline at (x,y) of width w and height h
+//!
+//! \param[in,out] graphics
+//! \param[in] x lower left corner x coordinate
+//! \param[in] y lower left corner y coordinate
+//! \param[in] w width of the rectangle in pixels
+//! \param[in] h height of the rectangle in pixels
+//! \param[in] color 32-bit color (R|G|B|A) to render line with
+void
+GraphicsDrawRect(struct graphics *graphics, int x, int y, int w, int h, uint32_t color);
 
 #endif // GRAPHICS_VERSION

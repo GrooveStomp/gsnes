@@ -4,7 +4,7 @@
 
   File: input.c
   Created: 2019-06-21
-  Updated: 2019-11-07
+  Updated: 2019-11-26
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
@@ -19,11 +19,16 @@
 
 #include "input.h"
 
+int MapToSdlEnum(enum input_key_enum e);
+
 //! \brief input state
 struct input {
         const unsigned char *sdlKeyStates;
         SDL_Event event;
         int isQuitPressed;
+        struct button_state *keyStates;
+        bool *keyStatesNew;
+        bool *keyStatesOld;
 };
 
 struct input *InputInit() {
@@ -34,15 +39,27 @@ struct input *InputInit() {
 
         memset(input, 0, sizeof(struct input));
 
-        /* input->keyStates = (struct input_key *)calloc(KEY_MAX + 1, sizeof(struct input_key)); */
-        /* if (NULL == input) { */
-        /*         free(input); */
-        /*         return NULL; */
-        /* } */
+        input->keyStates = (struct button_state *)calloc(KEY_COUNT, sizeof(struct button_state));
+        if (NULL == input->keyStates) {
+                InputDeinit(input);
+                return NULL;
+        }
 
-        /* for (int i = 0; i <= KEY_MAX; i++) { */
-        /*         *input->keyStates[i] = { 0 }; */
-        /* } */
+        input->keyStatesNew = (bool *)calloc(KEY_COUNT, sizeof(bool));
+        if (NULL == input->keyStatesNew) {
+                InputDeinit(input);
+                return NULL;
+        }
+
+        input->keyStatesOld = (bool *)calloc(KEY_COUNT, sizeof(bool));
+        if (NULL == input->keyStatesOld) {
+                InputDeinit(input);
+                return NULL;
+        }
+
+        for (int i = 0; i <= KEY_COUNT; i++) {
+                input->keyStates[i] = (struct button_state){ 0 };
+        }
 
         input->sdlKeyStates = SDL_GetKeyboardState(NULL);
         input->isQuitPressed = 0;
@@ -54,12 +71,41 @@ void InputDeinit(struct input *input) {
         if (NULL == input)
                 return;
 
+        if (NULL != input->keyStates)
+                free(input->keyStates);
+
+        if (NULL != input->keyStatesNew)
+                free(input->keyStatesNew);
+
+        if (NULL != input->keyStatesOld)
+                free(input->keyStatesOld);
+
         free(input);
 }
 
 void InputProcess(struct input *input) {
         input->isQuitPressed = 0;
         SDL_PumpEvents(); // Update sdlKeyState;
+
+        for (enum input_key_enum i = KEY_A; i < KEY_COUNT; i++) {
+                int sdlScancode = MapToSdlEnum(i);
+                input->keyStatesNew[i] = input->sdlKeyStates[sdlScancode];
+
+                if (input->keyStatesNew[i] == input->keyStatesOld[i]) {
+                        input->keyStates[i].pressed = false;
+                        input->keyStates[i].released = false;
+                        continue;
+                }
+
+                if (input->keyStatesNew[i]) {
+                        input->keyStates[i].pressed = !input->keyStates[i].held;
+                        input->keyStates[i].held = true;
+                } else {
+                        input->keyStates[i].released = true;
+                        input->keyStates[i].held = false;
+                }
+                input->keyStatesOld[i] = input->keyStatesNew[i];
+        }
 
         while (SDL_PollEvent(&input->event)) {
                 switch (input->event.type) {
@@ -82,6 +128,10 @@ void InputProcess(struct input *input) {
 
 int InputIsQuitRequested(struct input *input) {
         return input->isQuitPressed;
+}
+
+struct button_state InputGetKey(struct input *input, enum input_key_enum e) {
+        return input->keyStates[e];
 }
 
 int MapToSdlEnum(enum input_key_enum e) {
