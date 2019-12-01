@@ -264,13 +264,13 @@ int main(int argc, char **argv) {
 
                 GraphicsDrawSprite(graphics, 0, 0, PpuScreen(ppu), 3);
 
-                /* for (int y = 0; y < 30; y++) { */
-                /*         for (int x = 0; x < 32; x++) { */
-                /*                 char buf[5]; */
-                /*                 HexToString(PpuGetNameTable(ppu, 0)[y * 32 + x], 2, buf, 5); */
-                /*                 GraphicsDrawText(graphics, x * 16, y * 16, buf, 15, ColorBlack.rgba); */
-                /*         } */
-                /* } */
+                for (int y = 0; y < 30; y++) {
+                        for (int x = 0; x < 32; x++) {
+                                char buf[5];
+                                HexToString(PpuGetNameTable(ppu, 0)[y * 32 + x], 2, buf, 5);
+                                GraphicsDrawText(graphics, x * 16, y * 16, buf, 15, ColorBlack.rgba);
+                        }
+                }
 
                 GraphicsEnd(graphics);
         }

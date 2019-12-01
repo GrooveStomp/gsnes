@@ -63,7 +63,7 @@ struct instruction {
         uint8_t cycles;
 };
 
-static struct instruction instruction_map[] = {
+static struct instruction instructionMap[] = {
         { "BRK", BRK, IMM, 7 },{ "ORA", ORA, IZX, 6 },{ "???", XXX, IMP, 2 },{ "???", XXX, IMP, 8 },{ "???", NOP, IMP, 3 },{ "ORA", ORA, ZP0, 3 },{ "ASL", ASL, ZP0, 5 },{ "???", XXX, IMP, 5 },{ "PHP", PHP, IMP, 3 },{ "ORA", ORA, IMM, 2 },{ "ASL", ASL, IMP, 2 },{ "???", XXX, IMP, 2 },{ "???", NOP, IMP, 4 },{ "ORA", ORA, ABS, 4 },{ "ASL", ASL, ABS, 6 },{ "???", XXX, IMP, 6 },
         { "BPL", BPL, REL, 2 },{ "ORA", ORA, IZY, 5 },{ "???", XXX, IMP, 2 },{ "???", XXX, IMP, 8 },{ "???", NOP, IMP, 4 },{ "ORA", ORA, ZPX, 4 },{ "ASL", ASL, ZPX, 6 },{ "???", XXX, IMP, 6 },{ "CLC", CLC, IMP, 2 },{ "ORA", ORA, ABY, 4 },{ "???", NOP, IMP, 2 },{ "???", XXX, IMP, 7 },{ "???", NOP, IMP, 4 },{ "ORA", ORA, ABX, 4 },{ "ASL", ASL, ABX, 7 },{ "???", XXX, IMP, 7 },
         { "JSR", JSR, ABS, 6 },{ "AND", AND, IZX, 6 },{ "???", XXX, IMP, 2 },{ "???", XXX, IMP, 8 },{ "BIT", BIT, ZP0, 3 },{ "AND", AND, ZP0, 3 },{ "ROL", ROL, ZP0, 5 },{ "???", XXX, IMP, 5 },{ "PLP", PLP, IMP, 4 },{ "AND", AND, IMM, 2 },{ "ROL", ROL, IMP, 2 },{ "???", XXX, IMP, 2 },{ "BIT", BIT, ABS, 4 },{ "AND", AND, ABS, 4 },{ "ROL", ROL, ABS, 6 },{ "???", XXX, IMP, 6 },
@@ -111,7 +111,7 @@ enum status_flags {
 };
 
 struct cpu *CpuInit() {
-        struct cpu *cpu = (struct cpu *)malloc(sizeof(struct cpu));
+        struct cpu *cpu = (struct cpu *)calloc(1, sizeof(struct cpu));
         if (NULL == cpu) {
                 return NULL;
         }
@@ -156,7 +156,7 @@ static void SetFlag(struct cpu *cpu, enum status_flags f, bool v) {
 }
 
 static uint8_t Fetch(struct cpu* cpu) {
-        if (!(instruction_map[cpu->opcode].address == IMP)) {
+        if (!(instructionMap[cpu->opcode].address == IMP)) {
                 cpu->fetched = BusRead(cpu->bus, cpu->addrAbs, false);
         }
 
@@ -173,7 +173,7 @@ void CpuTick(struct cpu *cpu) {
                 SetFlag(cpu, U, 1);
 
                 // Now use the instruction map to get the instruction our opcode is implementing.
-                struct instruction *instruction = &instruction_map[cpu->opcode];
+                struct instruction *instruction = &instructionMap[cpu->opcode];
 
                 cpu->cycles = instruction->cycles; // Get starting number of cycles
                 uint8_t needMoreCycles1 = instruction->address(cpu);
@@ -216,25 +216,25 @@ void CpuReset(struct cpu *cpu) {
 }
 
 void Irq(struct cpu *cpu) {
-        if (GetFlag(cpu, I) == 0) {
-                BusWrite(cpu->bus, 0x0100 + cpu->sp, (cpu->pc >> 8) & 0x00FF);
-                cpu->sp--;
-                BusWrite(cpu->bus, 0x0100 + cpu->sp, cpu->pc & 0x00FF);
-                cpu->sp--;
+        if (GetFlag(cpu, I) != 0) return;
 
-                SetFlag(cpu, B, 0);
-                SetFlag(cpu, U, 1);
-                SetFlag(cpu, I, 1);
-                BusWrite(cpu->bus, 0x0100 + cpu->sp, cpu->status);
-                cpu->sp--;
+        BusWrite(cpu->bus, 0x0100 + cpu->sp, (cpu->pc >> 8) & 0x00FF);
+        cpu->sp--;
+        BusWrite(cpu->bus, 0x0100 + cpu->sp, cpu->pc & 0x00FF);
+        cpu->sp--;
 
-                cpu->addrAbs = 0xFFFE;
-                uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0, false);
-                uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1, false);
-                cpu->pc = (hi << 8) | lo;
+        SetFlag(cpu, B, 0);
+        SetFlag(cpu, U, 1);
+        SetFlag(cpu, I, 1);
+        BusWrite(cpu->bus, 0x0100 + cpu->sp, cpu->status);
+        cpu->sp--;
 
-                cpu->cycles = 7;
-        }
+        cpu->addrAbs = 0xFFFE;
+        uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0, false);
+        uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1, false);
+        cpu->pc = (hi << 8) | lo;
+
+        cpu->cycles = 7;
 }
 
 void CpuNmi(struct cpu *cpu) {
@@ -260,58 +260,6 @@ void CpuNmi(struct cpu *cpu) {
 
 //-- Addressing Modes ----------------------------------------------------------
 
-
-//! \brief Add with Carry
-//!
-//! \param[in,out] cpu
-//! \return 1 This addressing mode will incur another cycle if the instruction
-//! demands it
-uint8_t ADC(struct cpu *cpu) {
-        uint8_t fetched = Fetch(cpu);
-
-        // Add is performed in the 16-bit domain for emulation to capture the
-        // carry bit; which will exist in bit 8 of the 16-bit world.
-        uint16_t tmp = (uint16_t)cpu->a + (uint16_t)fetched + (uint16_t)GetFlag(cpu, C);
-
-        SetFlag(cpu, C, tmp > 255);
-        SetFlag(cpu, Z, (tmp & 0x00FF) == 0);
-
-        // The signed Overflow flag
-        SetFlag(cpu, V, (~((uint16_t)cpu->a ^ (uint16_t)fetched) & ((uint16_t)cpu->a ^ (uint16_t)tmp)) & 0x0000);
-
-        SetFlag(cpu, N, tmp & 0x00);
-
-        cpu->a = tmp & 0x00FF;
-
-        return 1;
-}
-
-//! \brief Subtraction with Borrow
-//!
-//! \param[in,out] cpu
-//! \return int 1 if this instruction _can_ take another clock cycle, else 0
-uint8_t SBC(struct cpu *cpu) {
-        uint8_t fetched = Fetch(cpu);
-
-        // Invert the bottom 8 bits with bitwise xor.
-        uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
-
-        // Subtraction is almost exactly the same as addition now, except for signed overflow.
-
-        uint16_t tmp = (uint16_t)cpu->a + (uint16_t)value + (uint16_t)GetFlag(cpu, C);
-
-        SetFlag(cpu, C, tmp > 255);
-        SetFlag(cpu, Z, (tmp & 0x00FF) == 0);
-
-        // The signed Overflow flag is different from addition.
-        SetFlag(cpu, V, (tmp ^ (uint16_t)cpu->a) & (tmp ^ value) & 0x0000);
-
-        SetFlag(cpu, N, tmp & 0x00);
-
-        cpu->a = tmp & 0x00FF;
-
-        return 1;
-}
 
 //! Absolute Addressing
 //!
@@ -410,14 +358,14 @@ uint8_t IMP(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t IND(struct cpu *cpu) {
-        uint16_t ptr_lo = BusRead(cpu->bus, cpu->pc, false);
+        uint16_t lo = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
-        uint16_t ptr_hi = BusRead(cpu->bus, cpu->pc, false);
+        uint16_t hi = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
 
-        uint16_t ptr = (ptr_hi << 8) | ptr_lo;
+        uint16_t ptr = (hi << 8) | lo;
 
-        if (ptr_lo == 0x00FF) { // Simulate page boundary hardware bug
+        if (lo == 0x00FF) { // Simulate page boundary hardware bug
                 cpu->addrAbs = (BusRead(cpu->bus, ptr & 0xFF00, false) << 8) | BusRead(cpu->bus, ptr + 0, false);
         } else { // Behave normally
                 cpu->addrAbs = (BusRead(cpu->bus, ptr + 1, false) << 8) | BusRead(cpu->bus, ptr + 0, false);
@@ -551,6 +499,56 @@ uint8_t ZPY(struct cpu *cpu) {
 //-- Instructions --------------------------------------------------------------
 
 
+//! \brief Add with Carry
+//!
+//! \param[in,out] cpu
+//! \return 1 This addressing mode will incur another cycle if the instruction
+//! demands it
+uint8_t ADC(struct cpu *cpu) {
+        uint8_t fetched = Fetch(cpu);
+
+        // Add is performed in the 16-bit domain for emulation to capture the
+        // carry bit; which will exist in bit 8 of the 16-bit world.
+        uint16_t tmp = (uint16_t)cpu->a + (uint16_t)fetched + (uint16_t)GetFlag(cpu, C);
+
+        SetFlag(cpu, C, tmp > 255);
+        SetFlag(cpu, Z, (tmp & 0x00FF) == 0);
+
+        // The signed Overflow flag
+        SetFlag(cpu, V, (~((uint16_t)cpu->a ^ (uint16_t)fetched) & ((uint16_t)cpu->a ^ (uint16_t)tmp)) & 0x0000);
+
+        SetFlag(cpu, N, tmp & 0x80);
+
+        cpu->a = tmp & 0x00FF;
+
+        return 1;
+}
+
+//! \brief Subtraction with Borrow
+//!
+//! \param[in,out] cpu
+//! \return int 1 if this instruction _can_ take another clock cycle, else 0
+uint8_t SBC(struct cpu *cpu) {
+        uint8_t fetched = Fetch(cpu);
+
+        // Invert the bottom 8 bits with bitwise xor.
+        uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
+
+        // Subtraction is almost exactly the same as addition now, except for signed overflow.
+
+        uint16_t tmp = (uint16_t)cpu->a + value + (uint16_t)GetFlag(cpu, C);
+
+        SetFlag(cpu, C, tmp & 0xFF00);
+        SetFlag(cpu, Z, 0 == (tmp & 0x00FF));
+
+        // The signed Overflow flag is different from addition.
+        SetFlag(cpu, V, (tmp ^ (uint16_t)cpu->a) & (tmp ^ value) & 0x0080);
+        SetFlag(cpu, N, tmp & 0x0080);
+        cpu->a = tmp & 0x00FF;
+
+        return 1;
+}
+
 //! \brief Bitwise logical AND
 //!
 //! \param[in,out] cpu
@@ -576,7 +574,7 @@ uint8_t ASL(struct cpu *cpu) {
         SetFlag(cpu, C, (tmp & 0xFF00) > 0);
         SetFlag(cpu, Z, (tmp & 0x00FF) == 0x00);
         SetFlag(cpu, N, tmp & 0x80);
-        if (instruction_map[cpu->opcode].address == IMP) {
+        if (instructionMap[cpu->opcode].address == IMP) {
                 cpu->a = tmp & 0x00FF;
         } else {
                 BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
@@ -735,7 +733,7 @@ uint8_t BPL(struct cpu *cpu) {
 
 //! \brief Break
 //!
-//! //! TODO: describe me
+//! Program-sourced interrupt
 //!
 //! \param[in,out] cpu
 //! \return 0 This instruction will take no additional cycles
@@ -1024,6 +1022,8 @@ uint8_t JSR(struct cpu *cpu) {
         return 0;
 }
 
+// TODO(AARONO): Finish reviewing instructions from here downward.
+
 //! \brief Load Into Accumulator
 //!
 //! A = data
@@ -1080,7 +1080,7 @@ uint8_t LSR(struct cpu *cpu) {
         SetFlag(cpu, Z, (tmp & 0x00FF) == 0x0000);
         SetFlag(cpu, N, tmp & 0x0080);
 
-        if (instruction_map[cpu->opcode].address == IMP)
+        if (instructionMap[cpu->opcode].address == IMP)
                 cpu->a = tmp & 0x00FF;
         else
                 BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
@@ -1190,7 +1190,7 @@ uint8_t ROL(struct cpu *cpu) {
         SetFlag(cpu, Z, (tmp & 0x00FF) == 0x0000);
         SetFlag(cpu, N, tmp & 0x0080);
 
-        if (instruction_map[cpu->opcode].address == IMP)
+        if (instructionMap[cpu->opcode].address == IMP)
                 cpu->a = tmp & 0x00FF;
         else
                 BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
@@ -1210,7 +1210,7 @@ uint8_t ROR(struct cpu *cpu) {
         SetFlag(cpu, Z, (tmp & 0x00FF) == 0x0000);
         SetFlag(cpu, N, tmp & 0x0080);
 
-        if (instruction_map[cpu->opcode].address == IMP)
+        if (instructionMap[cpu->opcode].address == IMP)
                 cpu->a = tmp & 0x00FF;
         else
                 BusWrite(cpu->bus, cpu->addrAbs, tmp & 0x00FF);
@@ -1528,7 +1528,7 @@ struct disassembly *DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t st
 
                 // Get the readable name of the instruction.
                 uint8_t opcode = BusRead(cpu->bus, addr, true);
-                instruction = instruction_map[opcode];
+                instruction = instructionMap[opcode];
                 addr++;
                 textLen += 4; // instruction.name is 3 chars, plus an extra space.
                 snprintf(text, textLen, "%s%s ", text_cpy, instruction.name); //<--
