@@ -4,7 +4,7 @@
 
   File: input.c
   Created: 2019-06-21
-  Updated: 2019-11-26
+  Updated: 2019-12-01
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
@@ -13,6 +13,7 @@
   conditions; See LICENSE for details.
  ******************************************************************************/
 //! \file input.c
+#include <stdlib.h> // calloc, free
 #include <string.h> // memset
 
 #include "SDL2/SDL.h"
@@ -27,17 +28,15 @@ struct input {
         SDL_Event event;
         int isQuitPressed;
         struct button_state *keyStates;
-        bool *keyStatesNew;
-        bool *keyStatesOld;
+        bool *keyPressesThisFrame; // boolmap of pressed keys.
+        bool *keyPressesLastFrame; // boolmap of pressed keys.
 };
 
 struct input *InputInit() {
-        struct input *input = (struct input *)malloc(sizeof(struct input));
+        struct input *input = (struct input *)calloc(1, sizeof(struct input));
         if (NULL == input) {
                 return NULL;
         }
-
-        memset(input, 0, sizeof(struct input));
 
         input->keyStates = (struct button_state *)calloc(KEY_COUNT, sizeof(struct button_state));
         if (NULL == input->keyStates) {
@@ -45,20 +44,16 @@ struct input *InputInit() {
                 return NULL;
         }
 
-        input->keyStatesNew = (bool *)calloc(KEY_COUNT, sizeof(bool));
-        if (NULL == input->keyStatesNew) {
+        input->keyPressesThisFrame = (bool *)calloc(KEY_COUNT, sizeof(bool));
+        if (NULL == input->keyPressesThisFrame) {
                 InputDeinit(input);
                 return NULL;
         }
 
-        input->keyStatesOld = (bool *)calloc(KEY_COUNT, sizeof(bool));
-        if (NULL == input->keyStatesOld) {
+        input->keyPressesLastFrame = (bool *)calloc(KEY_COUNT, sizeof(bool));
+        if (NULL == input->keyPressesLastFrame) {
                 InputDeinit(input);
                 return NULL;
-        }
-
-        for (int i = 0; i <= KEY_COUNT; i++) {
-                input->keyStates[i] = (struct button_state){ 0 };
         }
 
         input->sdlKeyStates = SDL_GetKeyboardState(NULL);
@@ -74,11 +69,11 @@ void InputDeinit(struct input *input) {
         if (NULL != input->keyStates)
                 free(input->keyStates);
 
-        if (NULL != input->keyStatesNew)
-                free(input->keyStatesNew);
+        if (NULL != input->keyPressesThisFrame)
+                free(input->keyPressesThisFrame);
 
-        if (NULL != input->keyStatesOld)
-                free(input->keyStatesOld);
+        if (NULL != input->keyPressesLastFrame)
+                free(input->keyPressesLastFrame);
 
         free(input);
 }
@@ -89,22 +84,29 @@ void InputProcess(struct input *input) {
 
         for (enum input_key_enum i = KEY_A; i < KEY_COUNT; i++) {
                 int sdlScancode = MapToSdlEnum(i);
-                input->keyStatesNew[i] = input->sdlKeyStates[sdlScancode];
+                input->keyPressesThisFrame[i] = input->sdlKeyStates[sdlScancode];
 
-                if (input->keyStatesNew[i] == input->keyStatesOld[i]) {
+                // The key is not in a _changed_ state - if it was held, it is
+                // still held; if it was not, it is still not.
+                if (input->keyPressesThisFrame[i] == input->keyPressesLastFrame[i]) {
                         input->keyStates[i].pressed = false;
                         input->keyStates[i].released = false;
                         continue;
                 }
 
-                if (input->keyStatesNew[i]) {
+                // The key has _changed_ state.
+
+                // Pressed
+                if (input->keyPressesThisFrame[i]) {
                         input->keyStates[i].pressed = !input->keyStates[i].held;
                         input->keyStates[i].held = true;
-                } else {
+                }
+                // Released
+                else {
                         input->keyStates[i].released = true;
                         input->keyStates[i].held = false;
                 }
-                input->keyStatesOld[i] = input->keyStatesNew[i];
+                input->keyPressesLastFrame[i] = input->keyPressesThisFrame[i];
         }
 
         while (SDL_PollEvent(&input->event)) {

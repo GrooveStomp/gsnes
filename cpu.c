@@ -5,7 +5,7 @@
 
   File: cpu.c
   Created: 2019-10-16
-  Updated: 2019-11-30
+  Updated: 2019-12-01
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -1405,10 +1405,10 @@ uint8_t XXX(struct cpu *cpu) {
 
 
 char **CpuDebugStateInit(struct cpu *cpu, int *numLines) {
-        char **debug = (char **)malloc(sizeof(char *) * 7);
+        char **debug = (char **)calloc(7, sizeof(char *));
 
         debug[0] = "        N V - B D I Z C";
-        debug[1] = malloc(strlen("status: 1 1 - 1 1 1 1 1") + 1);
+        debug[1] = calloc(strlen("status: 1 1 - 1 1 1 1 1") + 1, sizeof(char));
 
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wformat-overflow"
@@ -1424,19 +1424,19 @@ char **CpuDebugStateInit(struct cpu *cpu, int *numLines) {
 
         #pragma GCC diagnostic pop
 
-        debug[2] = malloc(strlen("pc: $0000") + 1);
+        debug[2] = calloc(strlen("pc: $0000") + 1, sizeof(char));
         sprintf(debug[2], "PC: $%04X", cpu->pc);
 
-        debug[3] = malloc(strlen("a:  $00") + 1);
+        debug[3] = calloc(strlen("a:  $00") + 1, sizeof(char));
         sprintf(debug[3], "A:  $%02X", cpu->a);
 
-        debug[4] = malloc(strlen("x:  $00") + 1);
+        debug[4] = calloc(strlen("x:  $00") + 1, sizeof(char));
         sprintf(debug[4], "X:  $%02X", cpu->x);
 
-        debug[5] = malloc(strlen("y:  $00") + 1);
+        debug[5] = calloc(strlen("y:  $00") + 1, sizeof(char));
         sprintf(debug[5], "Y:  $%02X", cpu->y);
 
-        debug[6] = malloc(strlen("sp: $0000") + 1);
+        debug[6] = calloc(strlen("sp: $0000") + 1, sizeof(char));
         sprintf(debug[6], "SP: $%04X", cpu->sp);
 
         *numLines = 7;
@@ -1449,21 +1449,23 @@ void CpuDebugStateDeinit(char **debug) {
                 return;
 
         for (int i = 1; i < 7; i++) {
-                if (NULL == debug[i])
-                        continue;
-                free(debug[i]);
+                if (NULL != debug[i]) {
+                        free(debug[i]);
+                }
         }
+
+        free(debug);
 }
 
 struct debug_instruction *DebugInstructionInit(uint16_t address, char *string, int length) {
-        struct debug_instruction *self = (struct debug_instruction *)malloc(sizeof(struct debug_instruction));
+        struct debug_instruction *self = (struct debug_instruction *)calloc(1, sizeof(struct debug_instruction));
         if (NULL == self) {
                 return NULL;
         }
 
-        self->text = malloc(length);
+        self->text = calloc(length + 1, sizeof(char));
         if (NULL == self->text) {
-                free(self);
+                DebugInstructionDeinit(self);
                 return NULL;
         }
 
@@ -1498,7 +1500,7 @@ struct disassembly *DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t st
         disassembly->count = stop - start;
         disassembly->map = (struct debug_instruction **)calloc(disassembly->count, sizeof(struct debug_instruction *));
         if (NULL == disassembly->map) {
-                free(disassembly);
+                DisassemblyDeinit(disassembly);
                 return NULL;
         }
 
@@ -1509,104 +1511,105 @@ struct disassembly *DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t st
         while (addr <= stop) {
                 char text[256] = { 0 };
                 char text_cpy[256] = { 0 };
-                uint8_t hex_buf_len = 5; // Space for terminating null.
-                char hex_buf[hex_buf_len];
-                uint16_t text_len = hex_buf_len; // Size adjusts as we construct string below.
+                uint8_t hexBufLen = 5; // Space for terminating null.
+                char hex_buf[hexBufLen];
+                memset(hex_buf, 0, hexBufLen);
+                uint16_t textLen = hexBufLen; // Size adjusts as we construct string below.
 
-                text_len = hex_buf_len; // Size adjusts as we construct string below.
+                textLen = hexBufLen; // Size adjusts as we construct string below.
                 line_addr = addr;
                 struct instruction instruction;
 
                 // Prefix instruction with address.
-                HexToString(addr, 4, hex_buf, hex_buf_len);
-                text_len += 3; // Adding $, <colon> and <space>
-                snprintf(text, text_len, "$%s: ", hex_buf);
-                strncpy(text_cpy, text, strnlen(text, text_len) + 1);
+                HexToString(addr, 4, hex_buf, hexBufLen);
+                textLen += 3; // Adding $, <colon> and <space>
+                snprintf(text, textLen, "$%s: ", hex_buf);
+                strncpy(text_cpy, text, strnlen(text, textLen) + 1);
 
                 // Get the readable name of the instruction.
                 uint8_t opcode = BusRead(cpu->bus, addr, true);
                 instruction = instruction_map[opcode];
                 addr++;
-                text_len += 4; // instruction.name is 3 chars, plus an extra space.
-                snprintf(text, text_len, "%s%s ", text_cpy, instruction.name); //<--
-                strncpy(text_cpy, text, strnlen(text, text_len));
+                textLen += 4; // instruction.name is 3 chars, plus an extra space.
+                snprintf(text, textLen, "%s%s ", text_cpy, instruction.name); //<--
+                strncpy(text_cpy, text, strnlen(text, textLen));
 
                 if (IMP == instruction.address) {
                         snprintf(text, 256, "%s {IMP}", text_cpy);
                 } else if (IMM == instruction.address) {
                         value = BusRead(cpu->bus, addr, true);
                         addr++;
-                        HexToString(value, 2, hex_buf, hex_buf_len);
+                        HexToString(value, 2, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s#$%s {IMM}", text_cpy, hex_buf);
                 } else if (ZP0 == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
-                        HexToString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s$%s {ZP0}", text_cpy, hex_buf);
                 } else if (ZPX == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
-                        HexToString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s$%s, X {ZPX}", text_cpy, hex_buf);
                 } else if (ZPY == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
-                        HexToString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s$%s, Y {ZPY}", text_cpy, hex_buf);
                 } else if (IZX == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
-                        HexToString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s($%s, X) {IZX}", text_cpy, hex_buf);
                 } else if (IZY == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
-                        HexToString(lo, 2, hex_buf, hex_buf_len);
+                        HexToString(lo, 2, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s($%s, Y) {IZY}", text_cpy, hex_buf);
                 } else if (ABS == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = BusRead(cpu->bus, addr, true);
                         addr++;
-                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
+                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s$%s {ABS}", text_cpy, hex_buf);
                 } else if (ABX == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = BusRead(cpu->bus, addr, true);
                         addr++;
-                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
+                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s$%s, X {ABX}", text_cpy, hex_buf);
                 } else if (ABY == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = BusRead(cpu->bus, addr, true);
                         addr++;
-                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
+                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s$%s, Y {ABY}", text_cpy, hex_buf);
                 } else if (IND == instruction.address) {
                         lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = BusRead(cpu->bus, addr, true);
                         addr++;
-                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
+                        HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hexBufLen);
                         snprintf(text, 256, "%s($%s) {IND}", text_cpy, hex_buf);
                 } else if (REL == instruction.address) {
                         value = BusRead(cpu->bus, addr, true);
                         addr++;
-                        HexToString(value, 2, hex_buf, hex_buf_len);
+                        HexToString(value, 2, hex_buf, hexBufLen);
 
                         char hex_buf2[5];
-                        HexToString(addr + (int8_t)value, 4, hex_buf2, hex_buf_len);
+                        HexToString(addr + (int8_t)value, 4, hex_buf2, hexBufLen);
                         snprintf(text, 256, "%s$%s [$%s] {REL}", text_cpy, hex_buf, hex_buf2);
                 }
 
-                disassembly->map[i] = DebugInstructionInit(line_addr, text, strnlen(text, 256));
+                disassembly->map[i] = DebugInstructionInit(line_addr, text, strnlen(text, 255));
                 i++;
         }
 
@@ -1621,6 +1624,11 @@ void DisassemblyDeinit(struct disassembly *disassembly) {
         }
 
         if (NULL != disassembly->map) {
+                for (int i = 0; i < disassembly->count; i++) {
+                        if (NULL != disassembly->map[i]) {
+                                DebugInstructionDeinit(disassembly->map[i]);
+                        }
+                }
                 free(disassembly->map);
         }
 

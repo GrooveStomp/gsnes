@@ -137,11 +137,11 @@ void Init() {
 void DrawCpuState(int x, int y) {
         GraphicsDrawText(graphics, x, y, "CPU State", FONT_HEADER_SCALE, 0x000000FF);
         int numLines = 0;
-        char **cpu_state = CpuDebugStateInit(cpu, &numLines);
+        char **cpuState = CpuDebugStateInit(cpu, &numLines);
         for (int i = 0; i < numLines; i++) {
-                GraphicsDrawText(graphics, x, (y - 15) - (18 * i), cpu_state[i], FONT_SCALE, 0x000000FF);
+                GraphicsDrawText(graphics, x, (y - 15) - (18 * i), cpuState[i], FONT_SCALE, 0x000000FF);
         }
-        CpuDebugStateDeinit(cpu_state);
+        CpuDebugStateDeinit(cpuState);
 }
 
 void DrawDisassembly(struct disassembly *disassembly, int x, int y, int numLines) {

@@ -4,7 +4,7 @@
 
   File: input.h
   Created: 2019-07-21
-  Updated: 2019-11-26
+  Updated: 2019-12-01
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 

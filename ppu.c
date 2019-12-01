@@ -4,7 +4,7 @@
 
   File: ppu.c
   Created: 2019-11-03
-  Updated: 2019-11-29
+  Updated: 2019-12-01
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -117,7 +117,7 @@ struct ppu {
 };
 
 struct ppu *PpuInit() {
-        struct ppu *ppu = (struct ppu *)malloc(sizeof(struct ppu));
+        struct ppu *ppu = (struct ppu *)calloc(1, sizeof(struct ppu));
         if (NULL == ppu) {
                 return NULL;
         }
@@ -322,7 +322,19 @@ void PpuDeinit(struct ppu *ppu) {
         if (NULL != ppu->patternTableSprites) {
                 SpriteDeinit(ppu->patternTableSprites[0]);
                 SpriteDeinit(ppu->patternTableSprites[1]);
-                free(ppu->nameTableSprites);
+                free(ppu->patternTableSprites);
+        }
+
+        if (NULL != ppu->screen) {
+                SpriteDeinit(ppu->screen);
+        }
+
+        if (NULL != ppu->paletteTables) {
+                free(ppu->paletteTables);
+        }
+
+        if (NULL != ppu->palette) {
+                free(ppu->palette);
         }
 
         free(ppu);
@@ -858,6 +870,9 @@ void PpuWriteViaCpu(struct ppu *ppu, uint16_t addr, uint8_t data) {
 uint8_t PpuReadViaCpu(struct ppu *ppu, uint16_t addr, bool readOnly) {
         uint8_t data = 0x00;
 
+        // Reading from PPU registers can affect their contents so this read
+        // only option is used for examining the state of the PPU without
+        // changing its state. This is really only used in debug mode.
         if (readOnly) {
                 switch(addr) {
                         case 0x0000: // Control
@@ -887,7 +902,12 @@ uint8_t PpuReadViaCpu(struct ppu *ppu, uint16_t addr, bool readOnly) {
                         case 0x0007: // PPU Data
                                 break;
                 }
-        } else { // Not ReadOnly
+        }
+
+        // These are the live PPU registers that repsond to being read from in
+	// various ways. Note that not all the registers are capable of being
+	// read from so they just return 0x00
+        else { // Not ReadOnly
                 switch (addr) {
                         case 0x000: // Control - Not Readable
                                 break;
@@ -920,7 +940,7 @@ uint8_t PpuReadViaCpu(struct ppu *ppu, uint16_t addr, bool readOnly) {
                         case 0x006: // PPU Address - Not Readable
                                 break;
 
-                        case 0x007: // PPU Data TODO
+                        case 0x007: // PPU Data
                                 // Normal reads are delayed by one cycle, so read the
                                 // buffer, then refresh the buffer.
                                 data = ppu->dataBuffer;
@@ -962,13 +982,13 @@ struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i, uint8_t palette) {
                                 // Each pixel is 2 bits, stored in two separate bit planes.
                                 // Each bit plane is 64 bits, which means the LSb
                                 // and MSb are always 64 bits (8 bytes) apart.
-                                uint8_t tileLsb = PpuRead(ppu, i * CHR_ROM + byteOffset + row + 0);
-                                uint8_t tileMsb = PpuRead(ppu, i * CHR_ROM + byteOffset + row + 8);
+                                uint8_t tileLsb = PpuRead(ppu, i * CHR_ROM + byteOffset + row + 0x0000);
+                                uint8_t tileMsb = PpuRead(ppu, i * CHR_ROM + byteOffset + row + 0x0008);
 
                                 // We read 8 bits worth of data, now we iterate
                                 // through each column of the current row.
                                 for (int col = 0; col < 8; col++) {
-                                        uint8_t pixel = (tileLsb & 0x01) + (tileMsb& 0x01);
+                                        uint8_t pixel = (tileLsb & 0x01) + (tileMsb & 0x01);
 
                                         // Shift each byte right one bit so the
                                         // next iteration works on the next

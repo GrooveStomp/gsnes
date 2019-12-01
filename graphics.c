@@ -277,7 +277,6 @@ void GraphicsDrawLine(struct graphics *graphics, int x1, int y1, int x2, int y2,
 
 void GraphicsInitText(struct graphics *graphics, unsigned char *ttfBuffer) {
         if (NULL == ttfBuffer) {
-                // TODO: error handling
                 return;
         }
 
@@ -312,6 +311,7 @@ void GraphicsDrawText(struct graphics *graphics, int x, int y, char *string, int
                                 GraphicsPutPixel(graphics, x + xOffset + (w + x0), y - (h + y0), color);
                         }
                 }
+                free(bitmap);
         }
 }
 

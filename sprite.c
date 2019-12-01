@@ -14,14 +14,14 @@
   conditions; See LICENSE for details.
 ******************************************************************************/
 //! \file sprite.c
-#include <stdlib.h> // malloc, free
+#include <stdlib.h> // calloc, free
 #include <math.h> // fmin
 
 #include "sprite.h"
 #include "color.h"
 
 struct sprite *SpriteInit(unsigned int width, unsigned int height) {
-        struct sprite *sprite = (struct sprite *)malloc(sizeof(struct sprite));
+        struct sprite *sprite = (struct sprite *)calloc(1, sizeof(struct sprite));
         if (NULL == sprite) {
                 return NULL;
         }
