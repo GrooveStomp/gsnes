@@ -5,7 +5,7 @@
 
   File: cpu.c
   Created: 2019-10-16
-  Updated: 2019-11-26
+  Updated: 2019-11-30
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -112,8 +112,11 @@ enum status_flags {
 
 struct cpu *CpuInit() {
         struct cpu *cpu = (struct cpu *)malloc(sizeof(struct cpu));
+        if (NULL == cpu) {
+                return NULL;
+        }
+
         cpu->bus = NULL;
-        return cpu;
 
         cpu->a = 0x00;
         cpu->x = 0x00;
@@ -127,6 +130,8 @@ struct cpu *CpuInit() {
         cpu->opcode = 0x00;
         cpu->cycles = 0;
         cpu->tickCount = 0;
+
+        return cpu;
 }
 
 void CpuDeinit(struct cpu *cpu) {
@@ -152,7 +157,7 @@ static void SetFlag(struct cpu *cpu, enum status_flags f, bool v) {
 
 static uint8_t Fetch(struct cpu* cpu) {
         if (!(instruction_map[cpu->opcode].address == IMP)) {
-                cpu->fetched = BusRead(cpu->bus, cpu->addrAbs);
+                cpu->fetched = BusRead(cpu->bus, cpu->addrAbs, false);
         }
 
         return cpu->fetched;
@@ -162,20 +167,24 @@ static uint8_t Fetch(struct cpu* cpu) {
 void CpuTick(struct cpu *cpu) {
         if (0 == cpu->cycles) {
                 // Read the next byte to determine which opcode we are using.
-                cpu->opcode = BusRead(cpu->bus, cpu->pc);
+                cpu->opcode = BusRead(cpu->bus, cpu->pc, false);
                 cpu->pc++;
+
+                SetFlag(cpu, U, 1);
 
                 // Now use the instruction map to get the instruction our opcode is implementing.
                 struct instruction *instruction = &instruction_map[cpu->opcode];
 
                 cpu->cycles = instruction->cycles; // Get starting number of cycles
-                uint8_t need_more_cycles_1 = instruction->address(cpu);
-                uint8_t need_more_cycles_2 = instruction->operate(cpu);
+                uint8_t needMoreCycles1 = instruction->address(cpu);
+                uint8_t needMoreCycles2 = instruction->operate(cpu);
 
                 // If both the address and operate functions indicate that an
                 // additional cycle was required, then increase the number of
                 // cycles by 1.
-                cpu->cycles += (need_more_cycles_1 & need_more_cycles_2);
+                cpu->cycles += (needMoreCycles1 & needMoreCycles2);
+
+                SetFlag(cpu, U, 1);
         }
 
         cpu->tickCount++;
@@ -187,17 +196,17 @@ int CpuIsComplete(struct cpu *cpu) {
 }
 
 void CpuReset(struct cpu *cpu) {
+        cpu->addrAbs = 0xFFFC;
+        uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0, false);
+        uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1, false);
+
+        cpu->pc = (hi << 8) | lo;
+
         cpu->a = 0;
         cpu->x = 0;
         cpu->y = 0;
         cpu->sp = 0xFD;
         cpu->status = 0x00 | U;
-
-        cpu->addrAbs = 0xFFFC;
-        uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0);
-        uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1);
-
-        cpu->pc = (hi << 8) | lo;
 
         cpu->addrRel = 0x0000;
         cpu->addrAbs = 0x0000;
@@ -220,8 +229,8 @@ void Irq(struct cpu *cpu) {
                 cpu->sp--;
 
                 cpu->addrAbs = 0xFFFE;
-                uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0);
-                uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1);
+                uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0, false);
+                uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1, false);
                 cpu->pc = (hi << 8) | lo;
 
                 cpu->cycles = 7;
@@ -241,8 +250,8 @@ void CpuNmi(struct cpu *cpu) {
         cpu->sp--;
 
         cpu->addrAbs = 0xFFFA;
-        uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0);
-        uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1);
+        uint16_t lo = BusRead(cpu->bus, cpu->addrAbs + 0, false);
+        uint16_t hi = BusRead(cpu->bus, cpu->addrAbs + 1, false);
         cpu->pc = (hi << 8) | lo;
 
         cpu->cycles = 8;
@@ -312,9 +321,9 @@ uint8_t SBC(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t ABS(struct cpu *cpu) {
-        uint16_t lo = BusRead(cpu->bus, cpu->pc);
+        uint16_t lo = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
-        uint16_t hi = BusRead(cpu->bus, cpu->pc);
+        uint16_t hi = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
 
         cpu->addrAbs = (hi << 8) | lo;
@@ -326,9 +335,9 @@ uint8_t ABS(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return int 1 if this addressing mode _can_ take another clock cycle, else 0
 uint8_t ABX(struct cpu *cpu) {
-        uint16_t lo = BusRead(cpu->bus, cpu->pc);
+        uint16_t lo = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
-        uint16_t hi = BusRead(cpu->bus, cpu->pc);
+        uint16_t hi = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
 
         cpu->addrAbs = (hi << 8) | lo;
@@ -346,9 +355,9 @@ uint8_t ABX(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return int 1 if this addressing mode _can_ take another clock cycle, else 0
 uint8_t ABY(struct cpu *cpu) {
-        uint16_t lo = BusRead(cpu->bus, cpu->pc);
+        uint16_t lo = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
-        uint16_t hi = BusRead(cpu->bus, cpu->pc);
+        uint16_t hi = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
 
         cpu->addrAbs = (hi << 8) | lo;
@@ -401,17 +410,17 @@ uint8_t IMP(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t IND(struct cpu *cpu) {
-        uint16_t ptr_lo = BusRead(cpu->bus, cpu->pc);
+        uint16_t ptr_lo = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
-        uint16_t ptr_hi = BusRead(cpu->bus, cpu->pc);
+        uint16_t ptr_hi = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
 
         uint16_t ptr = (ptr_hi << 8) | ptr_lo;
 
         if (ptr_lo == 0x00FF) { // Simulate page boundary hardware bug
-                cpu->addrAbs = (BusRead(cpu->bus, ptr & 0xFF00) << 8) | BusRead(cpu->bus, ptr + 0);
+                cpu->addrAbs = (BusRead(cpu->bus, ptr & 0xFF00, false) << 8) | BusRead(cpu->bus, ptr + 0, false);
         } else { // Behave normally
-                cpu->addrAbs = (BusRead(cpu->bus, ptr + 1) << 8) | BusRead(cpu->bus, ptr + 0);
+                cpu->addrAbs = (BusRead(cpu->bus, ptr + 1, false) << 8) | BusRead(cpu->bus, ptr + 0, false);
         }
 
         return 0;
@@ -426,12 +435,12 @@ uint8_t IND(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t IZX(struct cpu *cpu) {
-        uint16_t t = BusRead(cpu->bus, cpu->pc);
+        uint16_t t = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
 
         uint16_t offset = t + (uint16_t)(cpu->x);
-        uint16_t lo = BusRead(cpu->bus, offset & 0x00FF);
-        uint16_t hi = BusRead(cpu->bus, (offset +  1) & 0x00FF);
+        uint16_t lo = BusRead(cpu->bus, offset & 0x00FF, false);
+        uint16_t hi = BusRead(cpu->bus, (offset +  1) & 0x00FF, false);
 
         cpu->addrAbs = (hi << 8) | lo;
 
@@ -452,11 +461,11 @@ uint8_t IZX(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return int 1 if this addressing mode _can_ take another clock cycle, else 0
 uint8_t IZY(struct cpu *cpu) {
-        uint16_t t = BusRead(cpu->bus, cpu->pc);
+        uint16_t t = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
 
-        uint16_t lo = BusRead(cpu->bus, t & 0x00FF);
-        uint16_t hi = BusRead(cpu->bus, (t + 1) & 0x00FF);
+        uint16_t lo = BusRead(cpu->bus, t & 0x00FF, false);
+        uint16_t hi = BusRead(cpu->bus, (t + 1) & 0x00FF, false);
 
         cpu->addrAbs = (hi << 8) | lo;
         cpu->addrAbs += cpu->y;
@@ -476,7 +485,7 @@ uint8_t IZY(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t REL(struct cpu *cpu) {
-        cpu->addrRel = BusRead(cpu->bus, cpu->pc);
+        cpu->addrRel = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
 
         // REL involves signed values for jumps.
@@ -504,7 +513,7 @@ uint8_t REL(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t ZP0(struct cpu *cpu) {
-        cpu->addrAbs = BusRead(cpu->bus, cpu->pc);
+        cpu->addrAbs = BusRead(cpu->bus, cpu->pc, false);
         cpu->pc++;
         cpu->addrAbs &= 0x00FF;
         return 0;
@@ -518,7 +527,7 @@ uint8_t ZP0(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t ZPX(struct cpu *cpu) {
-        cpu->addrAbs = BusRead(cpu->bus, cpu->pc) + cpu->x;
+        cpu->addrAbs = BusRead(cpu->bus, cpu->pc, false) + cpu->x;
         cpu->pc++;
         cpu->addrAbs &= 0x00FF;
         return 0;
@@ -532,7 +541,7 @@ uint8_t ZPX(struct cpu *cpu) {
 //! \param[in,out] cpu
 //! \return 0 This addressing mode will take no additional cycles
 uint8_t ZPY(struct cpu *cpu) {
-        cpu->addrAbs = BusRead(cpu->bus, cpu->pc) + cpu->y;
+        cpu->addrAbs = BusRead(cpu->bus, cpu->pc, false) + cpu->y;
         cpu->pc++;
         cpu->addrAbs &= 0x00FF;
         return 0;
@@ -726,7 +735,7 @@ uint8_t BPL(struct cpu *cpu) {
 
 //! \brief Break
 //!
-//! //! TODO
+//! //! TODO: describe me
 //!
 //! \param[in,out] cpu
 //! \return 0 This instruction will take no additional cycles
@@ -744,7 +753,7 @@ uint8_t BRK(struct cpu*cpu) {
         cpu->sp--;
         SetFlag(cpu, B, 0);
 
-        cpu->pc = (uint16_t)BusRead(cpu->bus, 0xFFFE) | ((uint16_t)BusRead(cpu->bus, 0xFFFF) << 8);
+        cpu->pc = (uint16_t)BusRead(cpu->bus, 0xFFFE, false) | ((uint16_t)BusRead(cpu->bus, 0xFFFF, false) << 8);
         return 0;
 }
 
@@ -1151,7 +1160,7 @@ uint8_t PHP(struct cpu *cpu) {
 //! \return 0 This instruction will take no additional cycles
 uint8_t PLA(struct cpu *cpu) {
         cpu->sp++;
-        cpu->a = BusRead(cpu->bus, 0x0100 + cpu->sp);
+        cpu->a = BusRead(cpu->bus, 0x0100 + cpu->sp, false);
         SetFlag(cpu, Z, cpu->a == 0x00);
         SetFlag(cpu, N, cpu->a & 0x80);
         return 0;
@@ -1165,7 +1174,7 @@ uint8_t PLA(struct cpu *cpu) {
 //! \return 0 This instruction will take no additional cycles
 uint8_t PLP(struct cpu *cpu) {
         cpu->sp++;
-        cpu->status = BusRead(cpu->bus, 0x0100 + cpu->sp);
+        cpu->status = BusRead(cpu->bus, 0x0100 + cpu->sp, false);
         SetFlag(cpu, U, 1);
         return 0;
 }
@@ -1217,14 +1226,14 @@ uint8_t ROR(struct cpu *cpu) {
 //! \return 0 This instruction will take no additional cycles
 uint8_t RTI(struct cpu *cpu) {
         cpu->sp++;
-        cpu->status = BusRead(cpu->bus, 0x0100 + cpu->sp);
+        cpu->status = BusRead(cpu->bus, 0x0100 + cpu->sp, false);
         cpu->status &= ~B;
         cpu->status &= ~U;
 
         cpu->sp++;
-        cpu->pc = (uint16_t)BusRead(cpu->bus, 0x0100 + cpu->sp);
+        cpu->pc = (uint16_t)BusRead(cpu->bus, 0x0100 + cpu->sp, false);
         cpu->sp++;
-        cpu->pc |= (uint16_t)BusRead(cpu->bus, 0x0100 + cpu->sp) << 8;
+        cpu->pc |= (uint16_t)BusRead(cpu->bus, 0x0100 + cpu->sp, false) << 8;
 
         return 0;
 }
@@ -1235,9 +1244,9 @@ uint8_t RTI(struct cpu *cpu) {
 //! \return 0 This instruction will take no additional cycles
 uint8_t RTS(struct cpu *cpu) {
         cpu->sp++;
-        cpu->pc = (uint16_t)BusRead(cpu->bus, 0x0100 + cpu->sp);
+        cpu->pc = (uint16_t)BusRead(cpu->bus, 0x0100 + cpu->sp, false);
         cpu->sp++;
-        cpu->pc |= (uint16_t)BusRead(cpu->bus, 0x0100 + cpu->sp) << 8;
+        cpu->pc |= (uint16_t)BusRead(cpu->bus, 0x0100 + cpu->sp, false) << 8;
 
         cpu->pc++;
         return 0;
@@ -1395,7 +1404,7 @@ uint8_t XXX(struct cpu *cpu) {
 //-- Debug Structures ----------------------------------------------------------
 
 
-char **CpuDebugStateInit(struct cpu *cpu) {
+char **CpuDebugStateInit(struct cpu *cpu, int *numLines) {
         char **debug = (char **)malloc(sizeof(char *) * 7);
 
         debug[0] = "        N V - B D I Z C";
@@ -1429,6 +1438,8 @@ char **CpuDebugStateInit(struct cpu *cpu) {
 
         debug[6] = malloc(strlen("sp: $0000") + 1);
         sprintf(debug[6], "SP: $%04X", cpu->sp);
+
+        *numLines = 7;
 
         return debug;
 }
@@ -1513,7 +1524,7 @@ struct disassembly *DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t st
                 strncpy(text_cpy, text, strnlen(text, text_len) + 1);
 
                 // Get the readable name of the instruction.
-                uint8_t opcode = BusRead(cpu->bus, addr);
+                uint8_t opcode = BusRead(cpu->bus, addr, true);
                 instruction = instruction_map[opcode];
                 addr++;
                 text_len += 4; // instruction.name is 3 chars, plus an extra space.
@@ -1523,70 +1534,70 @@ struct disassembly *DisassemblyInit(struct cpu *cpu, uint16_t start, uint16_t st
                 if (IMP == instruction.address) {
                         snprintf(text, 256, "%s {IMP}", text_cpy);
                 } else if (IMM == instruction.address) {
-                        value = BusRead(cpu->bus, addr);
+                        value = BusRead(cpu->bus, addr, true);
                         addr++;
                         HexToString(value, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s#$%s {IMM}", text_cpy, hex_buf);
                 } else if (ZP0 == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
                         HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s {ZP0}", text_cpy, hex_buf);
                 } else if (ZPX == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
                         HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s, X {ZPX}", text_cpy, hex_buf);
                 } else if (ZPY == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
                         HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s, Y {ZPY}", text_cpy, hex_buf);
                 } else if (IZX == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
                         HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s($%s, X) {IZX}", text_cpy, hex_buf);
                 } else if (IZY == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
                         hi = 0x00;
                         HexToString(lo, 2, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s($%s, Y) {IZY}", text_cpy, hex_buf);
                 } else if (ABS == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
-                        hi = BusRead(cpu->bus, addr);
+                        hi = BusRead(cpu->bus, addr, true);
                         addr++;
                         HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s {ABS}", text_cpy, hex_buf);
                 } else if (ABX == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
-                        hi = BusRead(cpu->bus, addr);
+                        hi = BusRead(cpu->bus, addr, true);
                         addr++;
                         HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s, X {ABX}", text_cpy, hex_buf);
                 } else if (ABY == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
-                        hi = BusRead(cpu->bus, addr);
+                        hi = BusRead(cpu->bus, addr, true);
                         addr++;
                         HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s$%s, Y {ABY}", text_cpy, hex_buf);
                 } else if (IND == instruction.address) {
-                        lo = BusRead(cpu->bus, addr);
+                        lo = BusRead(cpu->bus, addr, true);
                         addr++;
-                        hi = BusRead(cpu->bus, addr);
+                        hi = BusRead(cpu->bus, addr, true);
                         addr++;
                         HexToString((uint16_t)(hi << 8) | lo, 4, hex_buf, hex_buf_len);
                         snprintf(text, 256, "%s($%s) {IND}", text_cpy, hex_buf);
                 } else if (REL == instruction.address) {
-                        value = BusRead(cpu->bus, addr);
+                        value = BusRead(cpu->bus, addr, true);
                         addr++;
                         HexToString(value, 2, hex_buf, hex_buf_len);
 

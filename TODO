@@ -1,5 +1,4 @@
-- Emulation isn't working.
-  SP seems to be changing, but nothing else?
+- Screen isn't rendering.
 
 - Fuzzy font rendering.
   Font overdraw? Improper buffer clearing?
@@ -10,3 +9,4 @@
 
 - Rendering CPU state includes garbage after valid string.
   I think the string capacity is specified incorrectly and/or there is a missing null character.
+  Look in cpu.c in the debug/disassembly stuff.

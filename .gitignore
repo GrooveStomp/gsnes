@@ -2,4 +2,4 @@ release
 #*
 debug
 core
-nestest.nes
+*.nes

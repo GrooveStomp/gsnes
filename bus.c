@@ -4,7 +4,7 @@
 
   File: bus.c
   Created: 2019-10-16
-  Updated: 2019-11-21
+  Updated: 2019-11-30
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -13,13 +13,14 @@
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
+//! \file bus.c
 #include <stdlib.h> // malloc, free
 
 #include "bus.h"
 #include "cpu.h"
 #include "ppu.h"
 #include "cart.h"
-//! \file bus.c
+#include "util.h"
 
 struct bus {
         struct cpu *cpu;
@@ -31,9 +32,11 @@ struct bus {
 
 struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
         struct bus *bus = (struct bus *)malloc(sizeof(struct bus));
+        if (NULL == bus)
+                return NULL;
 
-        bus->cpuRam = (uint8_t *)malloc(64 * 1024);
-        for (int i = 0; i < 64 * 1024; i++) {
+        bus->cpuRam = (uint8_t *)malloc(KB_AS_B(2));
+        for (int i = 0; i < KB_AS_B(2); i++) {
                 bus->cpuRam[i] = 0x00;
         }
 
@@ -66,7 +69,7 @@ void BusWrite(struct bus *bus, uint16_t addr, uint8_t data) {
         }
 }
 
-uint8_t BusRead(struct bus *bus, uint16_t addr) {
+uint8_t BusRead(struct bus *bus, uint16_t addr, bool readOnly) {
         uint8_t data = 0x00;
 
         if (CartCpuRead(bus->cart, addr, &data)) {
@@ -76,7 +79,7 @@ uint8_t BusRead(struct bus *bus, uint16_t addr) {
                 data = bus->cpuRam[addr & 0x07FF];
         } else if (addr >= 0x2000 && addr <= 0x3FFF) {
                 // PPU address range, mirrored every 8.
-                data = PpuReadViaCpu(bus->ppu, addr & 0x0007);
+                data = PpuReadViaCpu(bus->ppu, addr & 0x0007, readOnly);
         }
 
         return data;
@@ -88,7 +91,7 @@ void BusAttachCart(struct bus *bus, struct cart *cart) {
 }
 
 void BusReset(struct bus *bus) {
-        //CartReset(bus->cart);
+        CartReset(bus->cart);
         CpuReset(bus->cpu);
         PpuReset(bus->ppu);
         bus->tickCount = 0;

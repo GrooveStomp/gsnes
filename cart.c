@@ -4,7 +4,7 @@
 
   File: cart.c
   Created: 2019-11-03
-  Updated: 2019-11-21
+  Updated: 2019-11-27
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -32,6 +32,9 @@ struct cart {
         uint8_t *prgMem;
         uint8_t *chrMem;
         void *mapper;
+        mapper_init_fn mapperInit;
+        mapper_deinit_fn mapperDeinit;
+        mapper_reset_fn mapperReset;
         map_cpu_read_fn mapCpuRead;
         map_cpu_write_fn mapCpuWrite;
         map_ppu_read_fn mapPpuRead;
@@ -94,9 +97,9 @@ struct cart *CartInit(char *filename) {
 
         if (1 == file_type) {
                 cart->prgBanks = header.prgRomChunks;
-                cart->prgMem = (uint8_t *)malloc(sizeof(uint8_t) * KB_AS_B(16));
-                objs_read = fread(cart->prgMem, 1, KB_AS_B(16), f);
-                if (objs_read < KB_AS_B(16)) {
+                cart->prgMem = (uint8_t *)malloc(cart->prgBanks * KB_AS_B(16));
+                objs_read = fread(cart->prgMem, 1, cart->prgBanks * KB_AS_B(16), f);
+                if (objs_read < cart->prgBanks * KB_AS_B(16)) {
                         fclose(f);
                         free(cart);
                         return NULL;
@@ -104,13 +107,24 @@ struct cart *CartInit(char *filename) {
                 }
 
                 cart->chrBanks = header.chrRomChunks;
-                cart->chrMem = (uint8_t *)malloc(sizeof(uint8_t) * KB_AS_B(8));
-                objs_read = fread(cart->chrMem, 1, KB_AS_B(8), f);
-                if (objs_read < KB_AS_B(8)) {
-                        fclose(f);
-                        free(cart);
-                        return NULL;
-                        // TODO Couldn't read data from file - set appropriate error
+                if (0 == cart->chrBanks) {
+                        cart->chrMem = (uint8_t *)malloc(KB_AS_B(8));
+                        objs_read = fread(cart->chrMem, 1, KB_AS_B(8), f);
+                        if (objs_read < KB_AS_B(8)) {
+                                fclose(f);
+                                free(cart);
+                                return NULL;
+                                // TODO Couldn't read data from file - set appropriate error
+                        }
+                } else {
+                        cart->chrMem = (uint8_t *)malloc(cart->chrBanks * KB_AS_B(8));
+                        objs_read = fread(cart->chrMem, 1, cart->chrBanks * KB_AS_B(8), f);
+                        if (objs_read < cart->chrBanks * KB_AS_B(8)) {
+                                fclose(f);
+                                free(cart);
+                                return NULL;
+                                // TODO Couldn't read data from file - set appropriate error
+                        }
                 }
         }
 
@@ -120,14 +134,18 @@ struct cart *CartInit(char *filename) {
 
         switch(cart->mapperId) {
                 case 0: {
-                        cart->mapper = Mapper000_Init(cart->prgBanks, cart->chrBanks);
-                        if (NULL == cart->mapper) {
-                                // TODO handle cart->mapper not being initialized
-                        }
+                        cart->mapperInit = Mapper000_Init;
+                        cart->mapperDeinit = Mapper000_Deinit;
+                        cart->mapperReset = Mapper000_Reset;
                         cart->mapCpuRead = Mapper000_MapCpuRead;
                         cart->mapCpuWrite = Mapper000_MapCpuWrite;
                         cart->mapPpuRead = Mapper000_MapPpuRead;
                         cart->mapPpuWrite = Mapper000_MapPpuWrite;
+
+                        cart->mapper = cart->mapperInit(cart->prgBanks, cart->chrBanks);
+                        if (NULL == cart->mapper) {
+                                // TODO handle cart->mapper not being initialized
+                        }
                         break;
                 }
         }
@@ -148,13 +166,16 @@ void CartDeinit(struct cart *cart) {
         if (NULL != cart->prgMem)
                 free(cart->prgMem);
 
+        if (NULL != cart->mapper && NULL != cart->mapperDeinit)
+                cart->mapperDeinit(cart->mapper);
+
         free(cart);
 }
 
 bool CartCpuRead(struct cart *cart, uint16_t addr, uint8_t *data) {
-        uint32_t mapped_addr = 0;
-        if (cart->mapCpuRead(cart->mapper, addr, &mapped_addr)) {
-                *data = cart->prgMem[mapped_addr];
+        uint32_t mappedAddr = 0;
+        if (cart->mapCpuRead(cart->mapper, addr, &mappedAddr)) {
+                *data = cart->prgMem[mappedAddr];
                 return true;
         }
 
@@ -162,9 +183,9 @@ bool CartCpuRead(struct cart *cart, uint16_t addr, uint8_t *data) {
 }
 
 bool CartCpuWrite(struct cart *cart, uint16_t addr, uint8_t data) {
-        uint32_t mapped_addr = 0;
-        if (cart->mapCpuWrite(cart->mapper, addr, &mapped_addr)) {
-                cart->prgMem[mapped_addr] = data;
+        uint32_t mappedAddr = 0;
+        if (cart->mapCpuWrite(cart->mapper, addr, &mappedAddr)) {
+                cart->prgMem[mappedAddr] = data;
                 return true;
         }
 
@@ -172,9 +193,9 @@ bool CartCpuWrite(struct cart *cart, uint16_t addr, uint8_t data) {
 }
 
 bool CartPpuRead(struct cart *cart, uint16_t addr, uint8_t *data) {
-        uint32_t mapped_addr = 0;
-        if (cart->mapPpuRead(cart->mapper, addr, &mapped_addr)) {
-                *data = cart->chrMem[mapped_addr];
+        uint32_t mappedAddr = 0;
+        if (cart->mapPpuRead(cart->mapper, addr, &mappedAddr)) {
+                *data = cart->chrMem[mappedAddr];
                 return true;
         }
 
@@ -182,9 +203,9 @@ bool CartPpuRead(struct cart *cart, uint16_t addr, uint8_t *data) {
 }
 
 bool CartPpuWrite(struct cart *cart, uint16_t addr, uint8_t data) {
-        uint32_t mapped_addr = 0;
-        if (cart->mapPpuWrite(cart->mapper, addr, &mapped_addr)) {
-                cart->chrMem[mapped_addr] = data;
+        uint32_t mappedAddr = 0;
+        if (cart->mapPpuWrite(cart->mapper, addr, &mappedAddr)) {
+                cart->chrMem[mappedAddr] = data;
                 return true;
         }
 
@@ -193,4 +214,13 @@ bool CartPpuWrite(struct cart *cart, uint16_t addr, uint8_t data) {
 
 enum mirror CartMirroring(struct cart *cart) {
         return cart->mirror;
+}
+
+bool CartIsImageValid(struct cart *cart) {
+        return cart->isImageValid;
+}
+
+void CartReset(struct cart *cart) {
+        if (NULL != cart->mapper && NULL != cart->mapperReset)
+                cart->mapperReset(cart->mapper);
 }

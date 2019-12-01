@@ -4,7 +4,7 @@
 
   File: bus.h
   Created: 2019-10-16
-  Updated: 2019-11-19
+  Updated: 2019-11-30
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -13,11 +13,12 @@
   This is free software, and you are welcome to redistribute it under certain
   conditions; See LICENSE for details.
  ******************************************************************************/
-#include <stdint.h>
 //! \file bus.h
-
 #ifndef BUS_VERSION
 #define BUS_VERSION "0.1.0"
+
+#include <stdint.h>
+#include <stdbool.h>
 
 struct cpu;
 struct bus;
@@ -34,7 +35,7 @@ void
 BusWrite(struct bus *bus, uint16_t addr, uint8_t data);
 
 uint8_t
-BusRead(struct bus *bus, uint16_t addr);
+BusRead(struct bus *bus, uint16_t addr, bool readOnly);
 
 void
 BusReset(struct bus *bus);

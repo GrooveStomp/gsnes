@@ -4,7 +4,7 @@
 
   File: cpu.h
   Created: 2019-10-16
-  Updated: 2019-11-21
+  Updated: 2019-11-27
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -46,7 +46,7 @@ CpuNmi(struct cpu *cpu);
 //-- Debug ---------------------------------------------------------------------
 
 char **
-CpuDebugStateInit(struct cpu *cpu);
+CpuDebugStateInit(struct cpu *cpu, int *numLines);
 
 void
 CpuDebugStateDeinit(char **debug);

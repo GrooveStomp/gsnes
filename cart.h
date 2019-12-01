@@ -4,7 +4,7 @@
 
   File: cart.h
   Created: 2019-11-03
-  Updated: 2019-11-21
+  Updated: 2019-11-27
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -14,6 +14,11 @@
   conditions; See LICENSE for details.
  ******************************************************************************/
 //! \file cart.h
+//! The cartridge contains game data as well as circuitry.
+//! The circuitry is described by the Mapper interface.
+//! The cartridge is able to intercept reads and writes by both the CPU and PPU.
+//! \see mapper.h
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -49,5 +54,11 @@ CartPpuWrite(struct cart *cart, uint16_t addr, uint8_t data);
 
 enum mirror
 CartMirroring(struct cart *cart);
+
+bool
+CartIsImageValid(struct cart *cart);
+
+void
+CartReset(struct cart *cart);
 
 #endif // CART_VERSION

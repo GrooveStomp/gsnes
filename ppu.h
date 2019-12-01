@@ -4,7 +4,7 @@
 
   File: ppu.h
   Created: 2019-11-03
-  Updated: 2019-11-25
+  Updated: 2019-11-30
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -18,6 +18,7 @@
 #define PPU_VERSION "0.1.0"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 struct ppu;
 struct cart;
@@ -66,7 +67,7 @@ struct color *
 PpuGetColorFromPaletteRam(struct ppu *ppu, uint8_t palette, uint8_t pixel);
 
 uint8_t
-PpuReadViaCpu(struct ppu *ppu, uint16_t addr);
+PpuReadViaCpu(struct ppu *ppu, uint16_t addr, bool readOnly);
 
 void
 PpuWriteViaCpu(struct ppu *ppu, uint16_t addr, uint8_t data);

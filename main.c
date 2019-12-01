@@ -4,7 +4,7 @@
 
   File: main.c
   Created: 2019-10-31
-  Updated: 2019-11-26
+  Updated: 2019-11-29
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -72,6 +72,10 @@ void Init() {
                 fprintf(stderr, "Couldn't load cart");
                 Deinit(1);
         }
+        if (!CartIsImageValid(cart)) {
+                fprintf(stderr, "Couldn't load cart");
+                Deinit(1);
+        }
 
         cpu = CpuInit();
         if (NULL == cpu) {
@@ -132,8 +136,9 @@ void Init() {
 
 void DrawCpuState(int x, int y) {
         GraphicsDrawText(graphics, x, y, "CPU State", FONT_HEADER_SCALE, 0x000000FF);
-        char **cpu_state = CpuDebugStateInit(cpu);
-        for (int i = 0; i < 7; i++) {
+        int numLines = 0;
+        char **cpu_state = CpuDebugStateInit(cpu, &numLines);
+        for (int i = 0; i < numLines; i++) {
                 GraphicsDrawText(graphics, x, (y - 15) - (18 * i), cpu_state[i], FONT_SCALE, 0x000000FF);
         }
         CpuDebugStateDeinit(cpu_state);
@@ -170,9 +175,7 @@ int main(int argc, char **argv) {
         CpuConnectBus(cpu, bus);
         BusAttachCart(bus, cart);
 
-        // Set reset vector.
-        BusWrite(bus, 0xFFFC, 0x00);
-        BusWrite(bus, 0xFFFD, 0x80);
+        BusReset(bus);
 
         // Disassemble
         struct disassembly *disassembly = DisassemblyInit(cpu, 0x0000, 0xFFFF);
@@ -196,8 +199,15 @@ int main(int argc, char **argv) {
                 InputProcess(input);
                 isRunning = !InputIsQuitRequested(input);
 
+                if (InputGetKey(input, KEY_SPACE).pressed) isEmulating = !isEmulating;
+                if (InputGetKey(input, KEY_R).pressed) BusReset(bus);
+                if (InputGetKey(input, KEY_P).pressed) {
+                        ++selectedPalette;
+                        selectedPalette &= 0x07;
+                }
+
                 if (isEmulating) {
-                        if (0.0f < residualTime) {
+                        if (0.0f <= residualTime) {
                                 residualTime -= elapsedTime;
                         } else {
                                 residualTime += (1.0 / 60.0) - elapsedTime;
@@ -206,7 +216,7 @@ int main(int argc, char **argv) {
                         }
                 } else {
                         // Emulate code step-by-step.
-                        if (InputIsKeyPressed(input, KEY_C)) {
+                        if (InputGetKey(input, KEY_C).pressed) {
                                 // Tick enough times to execute a whole CPU instruction.
                                 do { BusTick(bus); } while (!CpuIsComplete(cpu));
 
@@ -217,7 +227,7 @@ int main(int argc, char **argv) {
                         }
 
                         // Emulate one whole frame.
-                        if (InputIsKeyPressed(input, KEY_F)) {
+                        if (InputGetKey(input, KEY_F).pressed) {
                                 // Clock enough times to draw a single frame.
                                 do { BusTick(bus); } while (!PpuIsFrameComplete(ppu));
 
@@ -228,13 +238,6 @@ int main(int argc, char **argv) {
                                 // Reset frame completion flag.
                                 PpuResetFrameCompletion(ppu);
                         }
-                }
-
-                if (InputGetKey(input, KEY_SPACE).pressed) isEmulating = !isEmulating;
-                if (InputGetKey(input, KEY_R).pressed) BusReset(bus);
-                if (InputGetKey(input, KEY_P).pressed) {
-                        ++selectedPalette;
-                        selectedPalette &= 0x07;
                 }
 
                 GraphicsDrawLine(graphics, NES_SCREEN_WIDTH, 0, NES_SCREEN_WIDTH, HEIGHT, ColorBlack.rgba);
@@ -264,8 +267,8 @@ int main(int argc, char **argv) {
                 /* for (int y = 0; y < 30; y++) { */
                 /*         for (int x = 0; x < 32; x++) { */
                 /*                 char buf[5]; */
-                /*                 //HexToString(PpuNameTableEntry(ppu, 0)[y * 32 + x], 2, buf, 5); */
-                /*                 //GraphicsDrawText(graphics, x * 16, y * 16, buf, 15, ColorBlack.rgba); */
+                /*                 HexToString(PpuGetNameTable(ppu, 0)[y * 32 + x], 2, buf, 5); */
+                /*                 GraphicsDrawText(graphics, x * 16, y * 16, buf, 15, ColorBlack.rgba); */
                 /*         } */
                 /* } */
 

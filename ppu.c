@@ -4,7 +4,7 @@
 
   File: ppu.c
   Created: 2019-11-03
-  Updated: 2019-11-26
+  Updated: 2019-11-29
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -23,8 +23,10 @@
 #include "color.h"
 #include "sprite.h"
 
-//! CHR_ROM startx at 0x1000 / 4096 / 4K
+//! CHR_ROM starts at 0x1000 == 4096 == 4K
 static const int CHR_ROM = 0x1000;
+static const int NAME_TABLE_SIZE = 1024;
+static const int PATTERN_TABLE_SIZE = 4096;
 
 union loopy_register {
         struct {
@@ -49,7 +51,7 @@ struct ppu {
         uint8_t **patternTables; //[2][4096];
         uint8_t *paletteTables; //[32];
 
-        struct color *palette;
+        struct color *palette; //[0x40];
         struct sprite *screen;
         struct sprite **nameTableSprites;
         struct sprite **patternTableSprites;
@@ -120,45 +122,87 @@ struct ppu *PpuInit() {
                 return NULL;
         }
 
-        ppu->palette = (struct color *)calloc(0x40, sizeof(struct color));
-        if (NULL == ppu->palette) {
-                PpuDeinit(ppu);
-                return NULL;
-        }
-
         ppu->screen = SpriteInit(256, 240);
         if (NULL == ppu->screen) {
                 PpuDeinit(ppu);
                 return NULL;
         }
 
-        ppu->nameTables = (uint8_t **)calloc(2, 1024);
+        uint8_t *nameTables = (uint8_t *)malloc(2 * NAME_TABLE_SIZE);
+        if (NULL == nameTables) {
+                PpuDeinit(ppu);
+                return NULL;
+        }
+        ppu->nameTables = (uint8_t **)calloc(2, sizeof(uint8_t *));
         if (NULL == ppu->nameTables) {
+                free(nameTables);
                 PpuDeinit(ppu);
                 return NULL;
         }
+        ppu->nameTables[0] = &nameTables[0];
+        ppu->nameTables[1] = &nameTables[NAME_TABLE_SIZE];
 
-        ppu->patternTables = (uint8_t **)calloc(2, 4096);
+        uint8_t *patternTables = (uint8_t *)malloc(2 * PATTERN_TABLE_SIZE);
+        if (NULL == patternTables) {
+                PpuDeinit(ppu);
+                return NULL;
+        }
+        ppu->patternTables = (uint8_t **)calloc(2, sizeof(uint8_t *));
         if (NULL == ppu->patternTables) {
+                free(patternTables);
                 PpuDeinit(ppu);
                 return NULL;
         }
+        ppu->patternTables[0] = &patternTables[0];
+        ppu->patternTables[1] = &patternTables[PATTERN_TABLE_SIZE];
 
-        ppu->paletteTables = (uint8_t *)calloc(32, 1);
+        ppu->paletteTables = (uint8_t *)calloc(32, sizeof(uint8_t));
         if (NULL == ppu->paletteTables) {
                 PpuDeinit(ppu);
                 return NULL;
         }
 
         ppu->nameTableSprites = (struct sprite **)calloc(2, sizeof(struct sprite *));
+        if (NULL == ppu->nameTableSprites) {
+                PpuDeinit(ppu);
+                return NULL;
+        }
         ppu->nameTableSprites[0] = SpriteInit(256, 240);
+        if (NULL == ppu->nameTableSprites[0]) {
+                free(ppu->nameTableSprites);
+                ppu->nameTableSprites = NULL;
+                PpuDeinit(ppu);
+                return NULL;
+        }
         ppu->nameTableSprites[1] = SpriteInit(256, 240);
-        // TODO: Error handling
+        if (NULL == ppu->nameTableSprites[1]) {
+                SpriteDeinit(ppu->nameTableSprites[0]);
+                free(ppu->nameTableSprites);
+                ppu->nameTableSprites = NULL;
+                PpuDeinit(ppu);
+                return NULL;
+        }
 
         ppu->patternTableSprites = (struct sprite **)calloc(2, sizeof(struct sprite *));
+        if (NULL == ppu->patternTableSprites) {
+                PpuDeinit(ppu);
+                return NULL;
+        }
         ppu->patternTableSprites[0] = SpriteInit(128, 128);
+        if (NULL == ppu->patternTableSprites[0]) {
+                free(ppu->patternTableSprites);
+                ppu->patternTableSprites = NULL;
+                PpuDeinit(ppu);
+                return NULL;
+        }
         ppu->patternTableSprites[1] = SpriteInit(128, 128);
-        // TODO: Error handling
+        if (NULL == ppu->patternTableSprites[1]) {
+                SpriteDeinit(ppu->patternTableSprites[0]);
+                free(ppu->patternTableSprites);
+                ppu->patternTableSprites = NULL;
+                PpuDeinit(ppu);
+                return NULL;
+        }
 
         ppu->cycle = 0;
         ppu->addressLatch = 0;
@@ -176,6 +220,12 @@ struct ppu *PpuInit() {
         ppu->bgShifterPatternHi = 0;
         ppu->bgShifterAttribLo = 0;
         ppu->bgShifterAttribHi = 0;
+
+        ppu->palette = (struct color *)calloc(0x40, sizeof(struct color));
+        if (NULL == ppu->palette) {
+                PpuDeinit(ppu);
+                return NULL;
+        }
 
         ppu->palette[0x00] = ColorInitInts(84, 84, 84, 255);
 	ppu->palette[0x01] = ColorInitInts(0, 30, 116, 255);
@@ -251,6 +301,28 @@ struct ppu *PpuInit() {
 void PpuDeinit(struct ppu *ppu) {
         if (NULL == ppu) {
                 return;
+        }
+
+        if (NULL != ppu->patternTables) {
+                free(ppu->patternTables[0]);
+                free(ppu->patternTables);
+        }
+
+        if (NULL != ppu->nameTables) {
+                free(ppu->nameTables[0]);
+                free(ppu->nameTables);
+        }
+
+        if (NULL != ppu->nameTableSprites) {
+                SpriteDeinit(ppu->nameTableSprites[0]);
+                SpriteDeinit(ppu->nameTableSprites[1]);
+                free(ppu->nameTableSprites);
+        }
+
+        if (NULL != ppu->patternTableSprites) {
+                SpriteDeinit(ppu->patternTableSprites[0]);
+                SpriteDeinit(ppu->patternTableSprites[1]);
+                free(ppu->nameTableSprites);
         }
 
         free(ppu);
@@ -353,12 +425,16 @@ void UpdateShifters(struct ppu *ppu) {
 //! \param[in,out] ppu
 void PpuTick(struct ppu *ppu) {
         if (ppu->scanline >= -1 && ppu->scanline < 240) {
+                if (0 == ppu->scanline && 0 == ppu->cycle) {
+                        ppu->cycle = 1;
+                }
+
                 // We've exited vblank/nmi and are ready to start rendering again.
                 if (-1 == ppu->scanline && 1 == ppu->cycle) {
                         ppu->status.verticalBlank = 0;
                 }
 
-                if ((ppu->cycle >= 2 && ppu->cycle <= 258) || (ppu->cycle >= 321 && ppu->cycle < 338)) {
+                if ((ppu->cycle >= 2 && ppu->cycle < 258) || (ppu->cycle >= 321 && ppu->cycle < 338)) {
                         UpdateShifters(ppu);
 
                         switch ((ppu->cycle - 1) % 8) {
@@ -464,9 +540,9 @@ void PpuTick(struct ppu *ppu) {
                                         // attribute byte offset.
                                         uint16_t addr =
                                                 0x23C0 |
-                                                (ppu->vramAddr.nametableY << 1) |
+                                                (ppu->vramAddr.nametableY << 11) |
                                                 (ppu->vramAddr.nametableX << 10) |
-                                                ((ppu->vramAddr.coarseY >> 1) << 3) |
+                                                ((ppu->vramAddr.coarseY >> 2) << 3) |
                                                 (ppu->vramAddr.coarseX >> 2);
 
                                         ppu->bgNextTileAttrib = PpuRead(ppu, addr);
@@ -587,10 +663,12 @@ void PpuTick(struct ppu *ppu) {
                 // Post render scanline - Do nothing!
         }
 
-        // We've entered vblank/nmi.
-        if (241 == ppu->scanline && 1 == ppu->cycle) {
-                ppu->status.verticalBlank = 1;
-                if (ppu->control.enableNmi) ppu->nmi = true;
+        if (ppu->scanline >= 241 && ppu->scanline < 261) {
+                // We've entered vblank/nmi.
+                if (241 == ppu->scanline && 1 == ppu->cycle) {
+                        ppu->status.verticalBlank = 1;
+                        if (ppu->control.enableNmi) ppu->nmi = true;
+                }
         }
 
         uint8_t bgPixel = 0x00;
@@ -759,7 +837,7 @@ void PpuWriteViaCpu(struct ppu *ppu, uint16_t addr, uint8_t data) {
 
                 case 0x0006: // PPU Address
                         if (0 == ppu->addressLatch) {
-                                ppu->tramAddr.reg = (ppu->tramAddr.reg & 0x00FF) | (data << 8);
+                                ppu->tramAddr.reg = (uint16_t)((data & 0x3F) << 8) | (ppu->tramAddr.reg & 0x00FF);
                                 ppu->addressLatch = 1;
                         } else {
                                 ppu->tramAddr.reg = (ppu->tramAddr.reg & 0xFF00) | data;
@@ -777,56 +855,85 @@ void PpuWriteViaCpu(struct ppu *ppu, uint16_t addr, uint8_t data) {
         }
 }
 
-uint8_t PpuReadViaCpu(struct ppu *ppu, uint16_t addr) {
+uint8_t PpuReadViaCpu(struct ppu *ppu, uint16_t addr, bool readOnly) {
         uint8_t data = 0x00;
-        addr &= 0x3FFF;
 
-        switch(addr) {
-                case 0x0000: // Control
-                break;
+        if (readOnly) {
+                switch(addr) {
+                        case 0x0000: // Control
+                                data = ppu->control.reg;
+                                break;
 
-                case 0x0001: // Mask
-                break;
+                        case 0x0001: // Mask
+                                data = ppu->mask.reg;
+                                break;
 
-                case 0x0002: // Status
-                        // Only the top 3 bits are actual status data.
-                        // The remaining 5 bits are garbage - but _most_likely_
-                        // whatever was in the data buffer.
-                        data = (ppu->status.reg & 0xE0) | (ppu->dataBuffer & 0x1F);
+                        case 0x0002: // Status
+                                data = ppu->status.reg;
+                                break;
 
-                        // Reading status also clears the vertical blank flag.
-                        ppu->status.verticalBlank = 0;
+                        case 0x0003: // OAM Address
+                                break;
 
-                        // Reading status also resets the address latch.
-                        ppu->addressLatch = 0;
-                break;
+                        case 0x0004: // OAM Data
+                                break;
 
-                case 0x0003: // OAM Address
-                break;
+                        case 0x0005: // Scroll
+                                break;
 
-                case 0x0004: // OAM Data
-                break;
+                        case 0x0006: // PPU Address
+                                break;
 
-                case 0x0005: // Scroll
-                break;
+                        case 0x0007: // PPU Data
+                                break;
+                }
+        } else { // Not ReadOnly
+                switch (addr) {
+                        case 0x000: // Control - Not Readable
+                                break;
 
-                case 0x0006: // PPU Address
-                break;
+                        case 0x001: // Mask - Not Readable
+                                break;
 
-                case 0x0007: // PPU Data
-                        // Normal reads are delayed by one cycle, so read the
-                        // buffer, then refresh the buffer.
-                        data = ppu->dataBuffer;
-                        ppu->dataBuffer = PpuRead(ppu, ppu->vramAddr.reg);
+                        case 0x002: // Status
+                                // Only the top 3 bits are actual status data.
+                                // The remaining 5 bits are garbage - but _most_likely_
+                                // whatever was in the data buffer.
+                                data = (ppu->status.reg & 0xE0) | (ppu->dataBuffer & 0x1F);
 
-                        // However, reading palette data is immediate.
-                        if (ppu->vramAddr.reg > 0x3F00) {
+                                // Reading status also clears the vertical blank flag.
+                                ppu->status.verticalBlank = 0;
+
+                                // Reading status also resets the address latch.
+                                ppu->addressLatch = 0;
+                                break;
+
+                        case 0x003: // OAM Address
+                                break;
+
+                        case 0x004: // OAM Data
+                                break;
+
+                        case 0x005: // Scroll - Not Readable
+                                break;
+
+                        case 0x006: // PPU Address - Not Readable
+                                break;
+
+                        case 0x007: // PPU Data TODO
+                                // Normal reads are delayed by one cycle, so read the
+                                // buffer, then refresh the buffer.
                                 data = ppu->dataBuffer;
-                        }
-                        ppu->vramAddr.reg += (ppu->control.incrementMode ? 32 : 1);
-                break;
-        }
+                                ppu->dataBuffer = PpuRead(ppu, ppu->vramAddr.reg);
 
+                                // However, reading palette data is immediate.
+                                if (ppu->vramAddr.reg >= 0x3F00) {
+                                        data = ppu->dataBuffer;
+                                }
+                                ppu->vramAddr.reg += (ppu->control.incrementMode ? 32 : 1);
+                                break;
+                }
+        }
         return data;
 }
 
@@ -891,7 +998,24 @@ struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i, uint8_t palette) {
 }
 
 void PpuReset(struct ppu *ppu) {
-        // TODO PpuReset()
+	ppu->fineX = 0x00;
+	ppu->addressLatch = 0x00;
+	ppu->dataBuffer = 0x00;
+	ppu->scanline = 0;
+	ppu->cycle = 0;
+	ppu->bgNextTileId = 0x00;
+	ppu->bgNextTileAttrib = 0x00;
+	ppu->bgNextTileLsb = 0x00;
+	ppu->bgNextTileMsb = 0x00;
+	ppu->bgShifterPatternLo = 0x0000;
+	ppu->bgShifterPatternHi = 0x0000;
+	ppu->bgShifterAttribLo = 0x0000;
+	ppu->bgShifterAttribHi = 0x0000;
+	ppu->status.reg = 0x00;
+	ppu->mask.reg = 0x00;
+	ppu->control.reg = 0x00;
+	ppu->vramAddr.reg = 0x0000;
+	ppu->tramAddr.reg = 0x0000;
 }
 
 int PpuIsFrameComplete(struct ppu *ppu) {
