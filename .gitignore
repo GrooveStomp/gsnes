@@ -3,3 +3,5 @@ release
 debug
 core
 *.nes
+docs/latex
+docs
