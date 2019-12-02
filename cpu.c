@@ -1022,8 +1022,6 @@ uint8_t JSR(struct cpu *cpu) {
         return 0;
 }
 
-// TODO(AARONO): Finish reviewing instructions from here downward.
-
 //! \brief Load Into Accumulator
 //!
 //! A = data
@@ -1239,6 +1237,8 @@ uint8_t RTI(struct cpu *cpu) {
 }
 
 //! \brief ??
+//!
+//! Restore cpu state but not the status flags after processing an interrupt.
 //!
 //! \param[in,out] cpu
 //! \return 0 This instruction will take no additional cycles

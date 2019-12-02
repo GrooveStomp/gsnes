@@ -4,7 +4,7 @@
 
   File: cart.c
   Created: 2019-11-03
-  Updated: 2019-11-27
+  Updated: 2019-12-02
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <stdio.h> // fopen
 #include <stdbool.h> // bool
-#include <stdlib.h> // malloc
+#include <stdlib.h> // calloc, free
 
 #include "cart.h"
 #include "util.h"
@@ -56,7 +56,7 @@ struct header {
 };
 
 struct cart *CartInit(char *filename) {
-        struct cart *cart = (struct cart *)malloc(sizeof(struct cart));
+        struct cart *cart = (struct cart *)calloc(1, sizeof(struct cart));
         if (NULL == cart) {
                 return NULL;
         }
@@ -91,15 +91,23 @@ struct cart *CartInit(char *filename) {
 
         // "Discover" file format.
         uint8_t file_type = 1;
+
         if (0 == file_type) {
                 // TODO unhandled file_type
         }
 
         if (1 == file_type) {
                 cart->prgBanks = header.prgRomChunks;
-                cart->prgMem = (uint8_t *)malloc(cart->prgBanks * KB_AS_B(16));
-                objs_read = fread(cart->prgMem, 1, cart->prgBanks * KB_AS_B(16), f);
-                if (objs_read < cart->prgBanks * KB_AS_B(16)) {
+                cart->prgMem = (uint8_t *)calloc(cart->prgBanks, KB_AS_B(16));
+                if (NULL == cart->prgMem) {
+                        fclose(f);
+                        free(cart);
+                        return NULL;
+                        // TODO Couldn't allocate memory for prgMem - set appropriate error
+                }
+
+                objs_read = fread(cart->prgMem, KB_AS_B(16), cart->prgBanks, f);
+                if (objs_read < cart->prgBanks) {
                         fclose(f);
                         free(cart);
                         return NULL;
@@ -107,24 +115,21 @@ struct cart *CartInit(char *filename) {
                 }
 
                 cart->chrBanks = header.chrRomChunks;
-                if (0 == cart->chrBanks) {
-                        cart->chrMem = (uint8_t *)malloc(KB_AS_B(8));
-                        objs_read = fread(cart->chrMem, 1, KB_AS_B(8), f);
-                        if (objs_read < KB_AS_B(8)) {
-                                fclose(f);
-                                free(cart);
-                                return NULL;
-                                // TODO Couldn't read data from file - set appropriate error
-                        }
-                } else {
-                        cart->chrMem = (uint8_t *)malloc(cart->chrBanks * KB_AS_B(8));
-                        objs_read = fread(cart->chrMem, 1, cart->chrBanks * KB_AS_B(8), f);
-                        if (objs_read < cart->chrBanks * KB_AS_B(8)) {
-                                fclose(f);
-                                free(cart);
-                                return NULL;
-                                // TODO Couldn't read data from file - set appropriate error
-                        }
+                int numBanks = (0 == cart->chrBanks) ? 1 : cart->chrBanks;
+
+                cart->chrMem = (uint8_t *)calloc(numBanks, KB_AS_B(8));
+                if (NULL == cart->chrMem) {
+                        fclose(f);
+                        free(cart);
+                        return NULL;
+                        // TODO Couldn't read data from file - set appropriate error
+                }
+                objs_read = fread(cart->chrMem, numBanks, KB_AS_B(8), f);
+                if (objs_read < numBanks) {
+                        fclose(f);
+                        free(cart);
+                        return NULL;
+                        // TODO Couldn't read data from file - set appropriate error
                 }
         }
 
@@ -144,7 +149,10 @@ struct cart *CartInit(char *filename) {
 
                         cart->mapper = cart->mapperInit(cart->prgBanks, cart->chrBanks);
                         if (NULL == cart->mapper) {
-                                // TODO handle cart->mapper not being initialized
+                                fclose(f);
+                                free(cart);
+                                return NULL;
+                                // TODO Couldn't initialize mapper - set appropriate error
                         }
                         break;
                 }

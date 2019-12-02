@@ -4,7 +4,7 @@
 
   File: mapper000.c
   Created: 2019-11-04
-  Updated: 2019-11-27
+  Updated: 2019-12-02
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -24,7 +24,7 @@ struct mapper000 {
 };
 
 void *Mapper000_Init(uint8_t prgBanks, uint8_t chrBanks) {
-        struct mapper000 *mapper = (struct mapper000 *)malloc(sizeof(struct mapper000));
+        struct mapper000 *mapper = (struct mapper000 *)calloc(1, sizeof(struct mapper000));
         if (NULL == mapper) {
                 return NULL;
         }
@@ -39,18 +39,25 @@ void Mapper000_Deinit(void *interface) {
         if (NULL == interface)
                 return;
 
-        free(interface);
+        free((struct mapper000 *)interface);
 }
 
 void Mapper000_Reset(void *mapper) {
 }
 
+uint16_t Mask(struct mapper000 *mapper) {
+        if (mapper->prgBanks > 1) {
+                return 0x7FFF;
+        } else {
+                return 0x3FFF;
+        }
+}
+
 bool Mapper000_MapCpuRead(void *interface, uint16_t addr, uint32_t *mappedAddr) {
         struct mapper000 *mapper = (struct mapper000 *)interface;
-        uint8_t mask = (mapper->prgBanks > 1) ? 0x7FFF : 0x3FFF;
 
         if (addr >= 0x8000 && addr <= 0xFFFF) {
-                *mappedAddr = addr & mask;
+                *mappedAddr = addr & Mask(mapper);
                 return true;
         }
 
@@ -59,10 +66,9 @@ bool Mapper000_MapCpuRead(void *interface, uint16_t addr, uint32_t *mappedAddr) 
 
 bool Mapper000_MapCpuWrite(void *interface, uint16_t addr, uint32_t *mappedAddr) {
         struct mapper000 *mapper = (struct mapper000 *)interface;
-        uint8_t mask = (mapper->prgBanks > 1) ? 0x7FFF : 0x3FFF;
 
         if (addr >= 0x8000 && addr <= 0xFFFF) {
-                *mappedAddr = addr & mask;
+                *mappedAddr = addr & Mask(mapper);
                 return true;
         }
 
@@ -80,6 +86,7 @@ bool Mapper000_MapPpuRead(void *interface, uint16_t addr, uint32_t *mappedAddr) 
 
 bool Mapper000_MapPpuWrite(void *interface, uint16_t addr, uint32_t *mappedAddr) {
         struct mapper000 *mapper = (struct mapper000 *)interface;
+
         if (addr >= 0x0000 && addr <= 0x1FFF) {
                 if (0 == mapper->chrBanks) {
                         // Treat as RAM.
