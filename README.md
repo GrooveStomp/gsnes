@@ -25,8 +25,8 @@ There are four targets in the `Makefile`:
 - `docs`
 
 The default target is `release`.
-`release` builds `gstxt` at `release/gsnes`.
-`debug` builds `gstxt` at `debug/gsnes`.
+`release` builds `gsnes` at `release/gsnes`.
+`debug` builds `gsnes` at `debug/gsnes`.
 `docs` builds the documentation with Doxygen.
 
 ## Using
