@@ -4,7 +4,7 @@
 
   File: graphics.c
   Created: 2019-06-25
-  Updated: 2019-11-19
+  Updated: 2019-12-03
   Author: Aaron Oman
   Notice: GNU GPLv3 License
 
@@ -319,20 +319,24 @@ void GraphicsDrawSprite(struct graphics *graphics, int x, int y, struct sprite *
         if (NULL == sprite) return;
 
         if (scale > 1) {
-                for (int i = 0; i < sprite->width; i++)
-                        for (int j = 0; j < sprite->height; j++)
+                for (int i = 0; i < sprite->width; i++) {
+                        for (int j = 0; j < sprite->height; j++) {
+                                int j1 = sprite->height - j - 1;
                                 for (int is = 0; is < scale; is++)
                                         for (int js = 0; js < scale; js++) {
                                                 uint32_t color = SpriteGetPixel(sprite, i, j);
                                                 int xp = x + (i * scale) + is;
-                                                int yp = y + (j * scale) + js;
+                                                int yp = y + (j1 * scale) + js;
                                                 GraphicsPutPixel(graphics, xp, yp, color);
                                         }
+                        }
+                }
         } else {
                 for (int i = 0; i < sprite->width; i++)
                         for (int j = 0; j < sprite->height; j++) {
+                                int yp = sprite->height - j - 1;
                                 uint32_t color = SpriteGetPixel(sprite, i, j);
-                                GraphicsPutPixel(graphics, x + i, y + j, color);
+                                GraphicsPutPixel(graphics, x + i, y + yp, color);
                         }
         }
 }

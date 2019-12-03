@@ -67,7 +67,7 @@ void Deinit(int code) {
 void Init() {
         char *ttf_filename = "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf";
 
-        cart = CartInit("nestest.nes");
+        cart = CartInit("ice_climber.nes");
         if (NULL == cart) {
                 fprintf(stderr, "Couldn't load cart");
                 Deinit(1);
@@ -263,14 +263,6 @@ int main(int argc, char **argv) {
                 GraphicsDrawSprite(graphics, NES_SCREEN_WIDTH + 129, HEIGHT - 719, PpuGetPatternTable(ppu, 1, selectedPalette), 1);
 
                 GraphicsDrawSprite(graphics, 0, 0, PpuScreen(ppu), 3);
-
-                for (int y = 0; y < 30; y++) {
-                        for (int x = 0; x < 32; x++) {
-                                char buf[5];
-                                HexToString(PpuGetNameTable(ppu, 0)[y * 32 + x], 2, buf, 5);
-                                GraphicsDrawText(graphics, x * 16, y * 16, buf, 15, ColorBlack.rgba);
-                        }
-                }
 
                 GraphicsEnd(graphics);
         }

@@ -14,7 +14,7 @@
   conditions; See LICENSE for details.
  ******************************************************************************/
 //! \file bus.c
-#include <stdlib.h> // malloc, free
+#include <stdlib.h> // calloc, free
 
 #include "bus.h"
 #include "cpu.h"
@@ -31,13 +31,14 @@ struct bus {
 };
 
 struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
-        struct bus *bus = (struct bus *)malloc(sizeof(struct bus));
+        struct bus *bus = (struct bus *)calloc(1, sizeof(struct bus));
         if (NULL == bus)
                 return NULL;
 
-        bus->cpuRam = (uint8_t *)malloc(KB_AS_B(2));
-        for (int i = 0; i < KB_AS_B(2); i++) {
-                bus->cpuRam[i] = 0x00;
+        bus->cpuRam = (uint8_t *)calloc(KB_AS_B(2), sizeof(uint8_t));
+        if (NULL == bus->cpuRam) {
+                BusDeinit(bus);
+                return NULL;
         }
 
         bus->cpu = cpu;

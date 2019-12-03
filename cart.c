@@ -72,6 +72,7 @@ struct cart *CartInit(char *filename) {
                 free(cart);
                 return NULL;
         }
+
         struct header header;
         size_t objs_read = fread(&header, sizeof(struct header), 1, f);
         if (objs_read != 1) {
@@ -124,7 +125,8 @@ struct cart *CartInit(char *filename) {
                         return NULL;
                         // TODO Couldn't read data from file - set appropriate error
                 }
-                objs_read = fread(cart->chrMem, numBanks, KB_AS_B(8), f);
+
+                objs_read = fread(cart->chrMem, KB_AS_B(8), numBanks, f);
                 if (objs_read < numBanks) {
                         fclose(f);
                         free(cart);

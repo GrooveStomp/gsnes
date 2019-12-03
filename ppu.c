@@ -4,7 +4,7 @@
 
   File: ppu.c
   Created: 2019-11-03
-  Updated: 2019-12-01
+  Updated: 2019-12-03
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -726,6 +726,8 @@ uint8_t PpuRead(struct ppu *ppu, uint16_t addr) {
                 uint16_t pattern_index = (addr & 0x1000) >> 12;
                 data = ppu->patternTables[pattern_index][addr & 0x0FFF];
         } else if (addr >= 0x2000 && addr <= 0x3EFF) {
+                addr &= 0x0FFF;
+
                 switch (CartMirroring(ppu->cart)) {
                         case MIRROR_VERTICAL: {
                                 if (addr >= 0x0000 && addr <= 0x03FF)
@@ -737,6 +739,7 @@ uint8_t PpuRead(struct ppu *ppu, uint16_t addr) {
                                 if (addr >= 0x0C00 && addr <= 0x0FFF)
                                         data = ppu->nameTables[1][addr & 0x03FF];
                         } break;
+
                         case MIRROR_HORIZONTAL: {
                                 if (addr >= 0x0000 && addr <= 0x03FF)
                                         data = ppu->nameTables[0][addr & 0x03FF];
@@ -747,8 +750,10 @@ uint8_t PpuRead(struct ppu *ppu, uint16_t addr) {
                                 if (addr >= 0x0C00 && addr <= 0x0FFF)
                                         data = ppu->nameTables[1][addr & 0x03FF];
                         } break;
-                        default:
-                                break;
+
+                        default: {
+
+                        } break;
                 }
         } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // Palette Memory.
                 addr &= 0x001F; // Mask the bottom 5 bits.
@@ -777,6 +782,7 @@ void PpuWrite(struct ppu *ppu, uint16_t addr, uint8_t data) {
                 ppu->patternTables[pattern_index][addr & 0x0FFF] = data;
         } else if (addr >= 0x2000 && addr <= 0x3EFF) {
                 addr &= 0x0FFF;
+
                 switch (CartMirroring(ppu->cart)) {
                         case MIRROR_VERTICAL: {
                                 if (addr >= 0x0000 && addr <= 0x03FF)
@@ -788,6 +794,7 @@ void PpuWrite(struct ppu *ppu, uint16_t addr, uint8_t data) {
                                 if (addr >= 0x0C00 && addr <= 0x0FFF)
                                         ppu->nameTables[1][addr & 0x03FF] = data;
                         } break;
+
                         case MIRROR_HORIZONTAL: {
                                 if (addr >= 0x0000 && addr <= 0x03FF)
                                         ppu->nameTables[0][addr & 0x03FF] = data;
@@ -798,8 +805,10 @@ void PpuWrite(struct ppu *ppu, uint16_t addr, uint8_t data) {
                                 if (addr >= 0x0C00 && addr <= 0x0FFF)
                                         ppu->nameTables[1][addr & 0x03FF] = data;
                         } break;
-                        default:
-                                break;
+
+                        default: {
+
+                        } break;
                 }
         } else if (addr >= 0x3F00 && addr <= 0x3FFF) { // Palette Memory.
                 addr &= 0x001F; // Mask the bottom 5 bits.
@@ -972,13 +981,13 @@ struct color *PpuGetColorFromPaletteRam(struct ppu *ppu, uint8_t palette, uint8_
 
 struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i, uint8_t palette) {
         // Loop through all 16x16 tiles
-        for (int tileY = 0; tileY < 16; tileY++) {
-                for (int tileX = 0; tileX < 16; tileX++) {
+        for (uint16_t tileY = 0; tileY < 16; tileY++) {
+                for (uint16_t tileX = 0; tileX < 16; tileX++) {
                         // Convert the 2D tile coordinate into a 1D offset into pattern table memory.
-                        int byteOffset = tileY * 256 + tileX * 16;
+                        uint16_t byteOffset = tileY * 256 + tileX * 16;
 
                         // Loop through 8 rows of 8 pixels per tile.
-                        for (int row = 0; row < 8; row++) {
+                        for (uint16_t row = 0; row < 8; row++) {
                                 // Each pixel is 2 bits, stored in two separate bit planes.
                                 // Each bit plane is 64 bits, which means the LSb
                                 // and MSb are always 64 bits (8 bytes) apart.
@@ -987,7 +996,7 @@ struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i, uint8_t palette) {
 
                                 // We read 8 bits worth of data, now we iterate
                                 // through each column of the current row.
-                                for (int col = 0; col < 8; col++) {
+                                for (uint16_t col = 0; col < 8; col++) {
                                         uint8_t pixel = (tileLsb & 0x01) + (tileMsb & 0x01);
 
                                         // Shift each byte right one bit so the
@@ -995,6 +1004,8 @@ struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i, uint8_t palette) {
                                         // column.
                                         tileLsb >>= 1;
                                         tileMsb >>= 1;
+
+                                        struct color *color = PpuGetColorFromPaletteRam(ppu, palette, pixel);
 
                                         // Because we are reading the LSb first,
                                         // we are effectively reading right to
@@ -1005,8 +1016,6 @@ struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i, uint8_t palette) {
                                         // right.
                                         int x = tileX * 8 + (7 - col);
                                         int y = tileY * 8 + row;
-
-                                        struct color *color = PpuGetColorFromPaletteRam(ppu, palette, pixel);
 
                                         SpriteSetPixel(ppu->patternTableSprites[i], x, y, color->rgba);
                                 }
@@ -1058,6 +1067,6 @@ void PpuSetNmi(struct ppu *ppu, uint8_t trueOrFalse) {
         ppu->nmi = trueOrFalse;
 }
 
-uint8_t *PpuGetNameTable(struct ppu *ppu, uint8_t i) {
-        return ppu->nameTables[i];
+struct sprite *PpuGetNameTable(struct ppu *ppu, uint8_t i) {
+        return ppu->nameTableSprites[i];
 }
