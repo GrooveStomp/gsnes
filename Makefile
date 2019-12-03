@@ -18,12 +18,12 @@ LINTFILES= $(patsubst %.c,__%.c,$(SRC)) $(patsubst %.c,_%.c,$(SRC))
 
 RELDIR = release
 RELOBJ = $(addprefix $(RELDIR)/,$(OBJFILES))
-RELEXE = $(RELDIR)/demo
+RELEXE = $(RELDIR)/gsnes
 RELFLG = -O3
 
 DBGDIR = debug
 DBGOBJ = $(addprefix $(DBGDIR)/,$(OBJFILES))
-DBGEXE = $(DBGDIR)/demo
+DBGEXE = $(DBGDIR)/gsnes
 DBGFLG = -g -Og
 
 TSTDIR = test
