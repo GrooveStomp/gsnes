@@ -67,7 +67,7 @@ void Deinit(int code) {
 void Init() {
         char *ttf_filename = "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf";
 
-        cart = CartInit("ice_climber.nes");
+        cart = CartInit("nes_test.nes");
         if (NULL == cart) {
                 fprintf(stderr, "Couldn't load cart");
                 Deinit(1);

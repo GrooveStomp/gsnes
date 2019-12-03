@@ -405,8 +405,8 @@ void LoadBackgroundShifters(struct ppu *ppu) {
         // convenience, so here we take the bottom 2 bits of the attribute word
         // which represent which palette is being used for the current 8 pixels
         // and the next 8 pixels, and "inflate" them to 8 bit words.
-        ppu->bgShifterAttribLo = (ppu->bgShifterAttribLo & 0xFF00) | (ppu->bgNextTileAttrib & 0x01) ? 0xFF : 0x00;
-        ppu->bgShifterAttribHi = (ppu->bgShifterAttribHi & 0xFF00) | (ppu->bgNextTileAttrib & 0x02) ? 0xFF : 0x00;
+        ppu->bgShifterAttribLo = (ppu->bgShifterAttribLo & 0xFF00) | ((ppu->bgNextTileAttrib & 0x01) ? 0xFF : 0x00);
+        ppu->bgShifterAttribHi = (ppu->bgShifterAttribHi & 0xFF00) | ((ppu->bgNextTileAttrib & 0x02) ? 0xFF : 0x00);
 }
 
 void UpdateShifters(struct ppu *ppu) {
