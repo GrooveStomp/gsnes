@@ -4,7 +4,7 @@
 
   File: bus.c
   Created: 2019-10-16
-  Updated: 2019-11-30
+  Updated: 2019-12-06
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -28,6 +28,8 @@ struct bus {
         struct cart *cart;
         uint8_t *cpuRam; // Dummy RAM for prototyping
         uint32_t tickCount;
+        struct controller controllers[2];
+        uint8_t controllerSnapshot[2];
 };
 
 struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
@@ -43,6 +45,8 @@ struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
 
         bus->cpu = cpu;
         bus->ppu = ppu;
+        bus->controllerSnapshot[0] = 0x00;
+        bus->controllerSnapshot[1] = 0x00;
 
         return bus;
 }
@@ -67,6 +71,8 @@ void BusWrite(struct bus *bus, uint16_t addr, uint8_t data) {
                 bus->cpuRam[addr & 0x07FF] = data;
         } else if (addr >= 0x2000 && addr <= 0x3FFF) {
                 PpuWriteViaCpu(bus->ppu, addr & 0x0007, data);
+        } else if (addr >= 0x4016 && addr <= 0x4017) {
+                bus->controllerSnapshot[addr & 0x0001] = bus->controllers[addr & 0x0001].input;
         }
 }
 
@@ -81,6 +87,9 @@ uint8_t BusRead(struct bus *bus, uint16_t addr, bool readOnly) {
         } else if (addr >= 0x2000 && addr <= 0x3FFF) {
                 // PPU address range, mirrored every 8.
                 data = PpuReadViaCpu(bus->ppu, addr & 0x0007, readOnly);
+        } else if (addr >= 0x4016 && addr <= 0x4017) {
+                data = (bus->controllerSnapshot[addr & 0x0001] & 0x80) > 0;
+                bus->controllerSnapshot[addr & 0x0001] <<= 1;
         }
 
         return data;
@@ -111,4 +120,8 @@ void BusTick(struct bus *bus) {
         }
 
         bus->tickCount++;
+}
+
+struct controller *BusGetControllers(struct bus *bus) {
+        return &bus->controllers;
 }

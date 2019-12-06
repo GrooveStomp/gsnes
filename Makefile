@@ -1,8 +1,8 @@
 #******************************************************************************
 # File: Makefile
 # Created: 2019-10-16
-# Updated: 2019-10-16
-# Author: Aaron Oman
+# Updated: 2019-12-03
+# Copyright (c) 2019 Aaron Oman (GrooveStomp)
 # Notice: Creative Commons Attribution 4.0 International License (CC-BY 4.0)
 #******************************************************************************
 CC       = /usr/bin/gcc

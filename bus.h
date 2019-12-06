@@ -4,7 +4,7 @@
 
   File: bus.h
   Created: 2019-10-16
-  Updated: 2019-11-30
+  Updated: 2019-12-06
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -24,6 +24,10 @@ struct cpu;
 struct bus;
 struct ppu;
 struct cart;
+
+struct controller {
+        uint8_t input;
+};
 
 struct bus *
 BusInit(struct cpu *cpu, struct ppu *ppu);
@@ -53,5 +57,8 @@ BusTick(struct bus *bus);
 
 void
 BusAttachCart(struct bus *bus, struct cart *cart);
+
+struct controller *
+BusGetControllers(struct bus *bus);
 
 #endif // BUS_VERSION

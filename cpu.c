@@ -5,7 +5,7 @@
 
   File: cpu.c
   Created: 2019-10-16
-  Updated: 2019-12-01
+  Updated: 2019-12-06
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -515,7 +515,7 @@ uint8_t ADC(struct cpu *cpu) {
         SetFlag(cpu, Z, (tmp & 0x00FF) == 0);
 
         // The signed Overflow flag
-        SetFlag(cpu, V, (~((uint16_t)cpu->a ^ (uint16_t)fetched) & ((uint16_t)cpu->a ^ (uint16_t)tmp)) & 0x0000);
+        SetFlag(cpu, V, (~((uint16_t)cpu->a ^ (uint16_t)fetched) & ((uint16_t)cpu->a ^ (uint16_t)tmp)) & 0x0080);
 
         SetFlag(cpu, N, tmp & 0x80);
 

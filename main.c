@@ -4,7 +4,7 @@
 
   File: main.c
   Created: 2019-10-31
-  Updated: 2019-11-29
+  Updated: 2019-12-06
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -178,7 +178,7 @@ int main(int argc, char **argv) {
         BusReset(bus);
 
         // Disassemble
-        struct disassembly *disassembly = DisassemblyInit(cpu, 0x0000, 0xFFFF);
+        struct disassembly *disassembly = DisassemblyInit(cpu, 0x0010, 0x0030);
 
         struct timespec frameEnd;
         struct timespec frameStart;
@@ -198,6 +198,17 @@ int main(int argc, char **argv) {
 
                 InputProcess(input);
                 isRunning = !InputIsQuitRequested(input);
+
+                struct controller *controllers = BusGetControllers(bus);
+                controllers[0].input = 0x00;
+                controllers[0].input |= InputGetKey(input, KEY_X).held ? 0x80 : 0x00;
+                controllers[0].input |= InputGetKey(input, KEY_Z).held ? 0x40 : 0x00;
+                controllers[0].input |= InputGetKey(input, KEY_A).held ? 0x20 : 0x00;
+                controllers[0].input |= InputGetKey(input, KEY_S).held ? 0x10 : 0x00;
+                controllers[0].input |= InputGetKey(input, KEY_UP).held ? 0x08 : 0x00;
+                controllers[0].input |= InputGetKey(input, KEY_DOWN).held ? 0x04 : 0x00;
+                controllers[0].input |= InputGetKey(input, KEY_LEFT).held ? 0x02 : 0x00;
+                controllers[0].input |= InputGetKey(input, KEY_RIGHT).held ? 0x01 : 0x00;
 
                 if (InputGetKey(input, KEY_SPACE).pressed) isEmulating = !isEmulating;
                 if (InputGetKey(input, KEY_R).pressed) BusReset(bus);
