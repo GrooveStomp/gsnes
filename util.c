@@ -4,7 +4,7 @@
 
   File: util.c
   Created: 2019-11-15
-  Updated: 2019-11-21
+  Updated: 2019-12-07
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -35,4 +35,12 @@ void HexToString(uint32_t hex, uint8_t nibbles, char *buf, uint8_t size) {
         }
 
         buf[nibbles] = '\0';
+}
+
+//! \see https:/stackoverflow.com/a/2602885
+uint8_t MirrorByte(uint8_t b) {
+        b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+        b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+        b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+        return b;
 }

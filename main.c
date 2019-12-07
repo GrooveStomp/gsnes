@@ -67,7 +67,7 @@ void Deinit(int code) {
 void Init() {
         char *ttf_filename = "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf";
 
-        cart = CartInit("nes_test.nes");
+        cart = CartInit("super_mario_bros.nes");
         if (NULL == cart) {
                 fprintf(stderr, "Couldn't load cart");
                 Deinit(1);

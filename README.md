@@ -32,6 +32,16 @@ The default target is `release`.
 ## Using
 For now the emulator is not configurable outside of modifying source directly. The NES rom to load is hardcoded into main.c.
 
+### Input
+- a: Select
+- s: Start
+- z: B
+- x: A
+- left: Left
+- right: Right
+- up: Up
+- down: Down
+
 # Screenshots
 ![NES Test](/docs/screenshots/gsnes-2019-12-03.01.png?raw=true "NES Test")
 ![Donkey Kong](/docs/screenshots/gsnes-2019-12-03.06.png?raw=true "Donkey Kong")

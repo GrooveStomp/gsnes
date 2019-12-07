@@ -4,7 +4,7 @@
 
   File: bus.c
   Created: 2019-10-16
-  Updated: 2019-12-06
+  Updated: 2019-12-07
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -15,6 +15,7 @@
  ******************************************************************************/
 //! \file bus.c
 #include <stdlib.h> // calloc, free
+#include <stdbool.h>
 
 #include "bus.h"
 #include "cpu.h"
@@ -30,6 +31,11 @@ struct bus {
         uint32_t tickCount;
         struct controller controllers[2];
         uint8_t controllerSnapshot[2];
+        uint8_t dmaPage;
+        uint8_t dmaAddr;
+        uint8_t dmaData;
+        bool dmaTransfer;
+        bool dmaDummy;
 };
 
 struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
@@ -47,6 +53,11 @@ struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
         bus->ppu = ppu;
         bus->controllerSnapshot[0] = 0x00;
         bus->controllerSnapshot[1] = 0x00;
+        bus->dmaPage = 0x00;
+        bus->dmaAddr = 0x00;
+        bus->dmaData = 0x00;
+        bus->dmaTransfer = false;
+        bus->dmaDummy = true;
 
         return bus;
 }
@@ -71,6 +82,10 @@ void BusWrite(struct bus *bus, uint16_t addr, uint8_t data) {
                 bus->cpuRam[addr & 0x07FF] = data;
         } else if (addr >= 0x2000 && addr <= 0x3FFF) {
                 PpuWriteViaCpu(bus->ppu, addr & 0x0007, data);
+        } else if (addr == 0x4014) {
+                bus->dmaPage = data;
+                bus->dmaAddr = 0x00;
+                bus->dmaTransfer = true;
         } else if (addr >= 0x4016 && addr <= 0x4017) {
                 bus->controllerSnapshot[addr & 0x0001] = bus->controllers[addr & 0x0001].input;
         }
@@ -110,8 +125,28 @@ void BusReset(struct bus *bus) {
 void BusTick(struct bus *bus) {
         PpuTick(bus->ppu);
 
-        if (0 == (bus->tickCount % 3)) {
-                CpuTick(bus->cpu);
+        if (bus->tickCount % 3 == 0) {
+                if (bus->dmaTransfer) {
+                        if (bus->dmaDummy) {
+                                if (bus->tickCount % 2 == 1) {
+                                        bus->dmaDummy = false;
+                                }
+                        } else {
+                                if (bus->tickCount % 2 == 0) {
+                                        bus->dmaData = BusRead(bus, bus->dmaPage << 8 | bus->dmaAddr, false);
+                                } else {
+                                        PpuGetOam(bus->ppu)[bus->dmaAddr] = bus->dmaData;
+                                        bus->dmaAddr++;
+
+                                        if (bus->dmaAddr == 0x00) {
+                                                bus->dmaTransfer = false;
+                                                bus->dmaDummy = true;
+                                        }
+                                }
+                        }
+                } else {
+                        CpuTick(bus->cpu);
+                }
         }
 
         if (PpuGetNmi(bus->ppu)) {
@@ -123,5 +158,5 @@ void BusTick(struct bus *bus) {
 }
 
 struct controller *BusGetControllers(struct bus *bus) {
-        return &bus->controllers;
+        return (struct controller *)&bus->controllers;
 }

@@ -4,7 +4,7 @@
 
   File: ppu.c
   Created: 2019-11-03
-  Updated: 2019-12-03
+  Updated: 2019-12-07
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -17,11 +17,13 @@
 #include <stdlib.h> // malloc, free
 #include <stdbool.h> // bool
 #include <stdio.h>
+#include <string.h> // memset
 
 #include "ppu.h"
 #include "cart.h"
 #include "color.h"
 #include "sprite.h"
+#include "util.h"
 
 //! CHR_ROM starts at 0x1000 == 4096 == 4K
 static const int CHR_ROM = 0x1000;
@@ -88,12 +90,25 @@ struct ppu {
 			uint8_t incrementMode : 1;
 			uint8_t patternSprite : 1;
 			uint8_t patternBackground : 1;
-			uint8_t spriteSize : 1;
-			uint8_t slaveMode : 1; // unused
+			uint8_t spriteSize : 1; // 0 for 8-bit high sprites, otherwise 16-bit high
+			uint8_t slaveMode : 1; // Unused
 			uint8_t enableNmi : 1;
                 };
                 uint8_t reg;
         } control;
+
+        struct oam_entry {
+                uint8_t y; // y pos.
+                uint8_t id; // ID of tile from pattern memory.
+                uint8_t attribute; // Flags define how sprite should be rendered.
+                uint8_t x; // x pos.
+        } oam[64];
+        uint8_t oamAddr;
+
+        uint8_t spriteCount;
+        struct oam_entry scanlineSprites[8];
+        uint8_t spriteShifterPatternLo[8]; // Low bitplanes of sprites
+        uint8_t spriteShifterPatternHi[8]; // High bitplanes of sprites
 
         union loopy_register vramAddr;
         union loopy_register tramAddr;
@@ -114,6 +129,9 @@ struct ppu {
         uint16_t bgShifterAttribHi;
 
         bool nmi;
+
+        bool isSpriteZeroHitPossible;
+        bool isSpriteZeroBeingRendered;
 };
 
 struct ppu *PpuInit() {
@@ -220,6 +238,9 @@ struct ppu *PpuInit() {
         ppu->bgShifterPatternHi = 0;
         ppu->bgShifterAttribLo = 0;
         ppu->bgShifterAttribHi = 0;
+        ppu->oamAddr = 0x00;
+        ppu->isSpriteZeroHitPossible = false;
+        ppu->isSpriteZeroBeingRendered = false;
 
         ppu->palette = (struct color *)calloc(0x40, sizeof(struct color));
         if (NULL == ppu->palette) {
@@ -410,21 +431,33 @@ void LoadBackgroundShifters(struct ppu *ppu) {
 }
 
 void UpdateShifters(struct ppu *ppu) {
-        if (!ppu->mask.renderBackground) return;
+        if (ppu->mask.renderBackground) {
+                // Every cycle the shifters storing pattern and attribute
+                // information shift their contents by 1 bit. This is because
+                // every cycle, the output progresses by 1 pixel. This means
+                // relatively, the state of the shifter is in sync with the
+                // pixels being drawn for that 8 pixel section of the scanline.
 
-        // Every cycle the shifters storing pattern and attribute information
-        // shift their contents by 1 bit. This is because every cycle, the
-        // output progresses by 1 pixel. This means relatively, the state of the
-        // shifter is in sync with the pixels being drawn for that 8 pixel
-        // section of the scanline.
+                // Shift background tile pattern row.
+                ppu->bgShifterPatternLo <<= 1;
+                ppu->bgShifterPatternHi <<= 1;
 
-        // Shift background tile pattern row.
-        ppu->bgShifterPatternLo <<= 1;
-        ppu->bgShifterPatternHi <<= 1;
+                // Shift palette attributes by 1.
+                ppu->bgShifterAttribLo <<= 1;
+                ppu->bgShifterAttribHi <<= 1;
+        }
 
-        // Shift palette attributes by 1.
-        ppu->bgShifterAttribLo <<= 1;
-        ppu->bgShifterAttribHi <<= 1;
+        // Only update sprite shifters when they are visible on screen.
+        if (ppu->mask.renderSprites && ppu->cycle >= 1 && ppu->cycle < 258) {
+                for (int i = 0; i < ppu->spriteCount; i++) {
+                        if (ppu->scanlineSprites[i].x > 0) {
+                                ppu->scanlineSprites[i].x--;
+                        } else {
+                                ppu->spriteShifterPatternLo[i] <<= 1;
+                                ppu->spriteShifterPatternHi[i] <<= 1;
+                        }
+                }
+        }
 }
 
 //! \brief advance the renderer one pixel across the screen
@@ -437,13 +470,21 @@ void UpdateShifters(struct ppu *ppu) {
 //! \param[in,out] ppu
 void PpuTick(struct ppu *ppu) {
         if (ppu->scanline >= -1 && ppu->scanline < 240) {
-                if (0 == ppu->scanline && 0 == ppu->cycle) {
+                //-- Background Rendering --------------------------------------
+                if (ppu->scanline == 0 && ppu->cycle == 0) {
                         ppu->cycle = 1;
                 }
 
                 // We've exited vblank/nmi and are ready to start rendering again.
-                if (-1 == ppu->scanline && 1 == ppu->cycle) {
+                if (ppu->scanline == -1 && ppu->cycle == 1) {
                         ppu->status.verticalBlank = 0;
+                        ppu->status.spriteZeroHit = 0;
+                        ppu->status.spriteOverflow = 0;
+
+                        for (int i = 0; i < 8; i++) {
+                                ppu->spriteShifterPatternLo[i] = 0;
+                                ppu->spriteShifterPatternHi[i] = 0;
+                        }
                 }
 
                 if ((ppu->cycle >= 2 && ppu->cycle < 258) || (ppu->cycle >= 321 && ppu->cycle < 338)) {
@@ -669,6 +710,105 @@ void PpuTick(struct ppu *ppu) {
                 if (-1 == ppu->scanline && ppu->cycle >= 280 && ppu->cycle < 305) {
                         TransferAddressY(ppu);
                 }
+
+                //-- Foreground Rendering --------------------------------------
+
+                if (ppu->cycle == 257 && ppu->scanline >= 0) {
+                        memset(ppu->scanlineSprites, 0xFF, 8 * sizeof(struct oam_entry));
+                        ppu->spriteCount = 0;
+
+                        ppu->isSpriteZeroHitPossible = false;
+                        uint8_t oamEntry = 0;
+                        while (oamEntry < 64 && ppu->spriteCount < 9) {
+                                int16_t diff = ((int16_t)ppu->scanline - (int16_t)ppu->oam[oamEntry].y);
+                                if (diff >= 0 && diff < (ppu->control.spriteSize ? 16 : 8)) {
+                                        if (ppu->spriteCount < 8) {
+                                                if (oamEntry == 0) {
+                                                        ppu->isSpriteZeroHitPossible = true;
+                                                }
+                                                memcpy(&ppu->scanlineSprites[ppu->spriteCount], &ppu->oam[oamEntry], sizeof(struct oam_entry));
+                                                ppu->spriteCount++;
+                                        }
+                                }
+                                oamEntry++;
+                        }
+                        ppu->status.spriteOverflow = (ppu->spriteCount > 8);
+                }
+
+                if (ppu->cycle == 340) {
+                        for (int i = 0; i < ppu->spriteCount; i++) {
+                                uint8_t spritePatternBitsLo, spritePatternBitsHi;
+                                uint16_t spritePatternAddrLo, spritePatternAddrHi;
+
+                                // 8x8 Sprite Mode
+                                if (!ppu->control.spriteSize) {
+                                        // Sprite is NOT flipped vertically.
+                                        if (!(ppu->scanlineSprites[i].attribute & 0x80)) {
+                                                spritePatternAddrLo =
+                                                        (ppu->control.patternSprite << 12) // 0K or 4K on PPU Bus.
+                                                        | (ppu->scanlineSprites[i].id << 4)
+                                                        | (ppu->scanline - ppu->scanlineSprites[i].y);
+                                        }
+                                        // Sprite IS flipped vertically.
+                                        else {
+                                                spritePatternAddrLo =
+                                                        (ppu->control.patternSprite << 12) // 0K or 4K on PPU Bus.
+                                                        | (ppu->scanlineSprites[i].id << 4)
+                                                        | (7 - (ppu->scanline - ppu->scanlineSprites[i].y));
+                                        }
+                                }
+                                // 8x16 Sprite Mode
+                                else {
+                                        // Sprite is NOT flipped vertically.
+                                        if (!(ppu->scanlineSprites[i].attribute & 0x80)) {
+                                                // Read the top half of the tile.
+                                                if (ppu->scanline - ppu->scanlineSprites[i].y < 8) {
+                                                        spritePatternAddrLo =
+                                                                ((ppu->scanlineSprites[i].id & 0x01) << 12)
+                                                                | ((ppu->scanlineSprites[i].id & 0xFE) << 4)
+                                                                | ((ppu->scanline - ppu->scanlineSprites[i].y) & 0x07);
+                                                }
+                                                // Read the bottom half of the tile.
+                                                else {
+                                                        spritePatternAddrLo =
+                                                                ((ppu->scanlineSprites[i].id & 0x01) << 12)
+                                                                | (((ppu->scanlineSprites[i].id & 0xFE) + 1)<< 4)
+                                                                | ((ppu->scanline - ppu->scanlineSprites[i].y) & 0x07);
+                                                }
+                                        }
+                                        // Sprite IS flipped vertically.
+                                        else {
+                                                // Read the top half of the tile.
+                                                if (ppu->scanline - ppu->scanlineSprites[i].y < 8) {
+                                                        spritePatternAddrLo =
+                                                                ((ppu->scanlineSprites[i].id & 0x01) << 12)
+                                                                | ((ppu->scanlineSprites[i].id & 0xFE) << 4)
+                                                                | ((7 - (ppu->scanline - ppu->scanlineSprites[i].y)) & 0x07);
+                                                }
+                                                // Read the bottom half of the tile.
+                                                else {
+                                                        spritePatternAddrLo =
+                                                                ((ppu->scanlineSprites[i].id & 0x01) << 12)
+                                                                | (((ppu->scanlineSprites[i].id & 0xFE) + 1)<< 4)
+                                                                | ((7 - (ppu->scanline - ppu->scanlineSprites[i].y)) & 0x07);
+                                                }
+                                        }
+                                }
+
+                                spritePatternAddrHi = spritePatternAddrLo + 8;
+                                spritePatternBitsLo = PpuRead(ppu, spritePatternAddrLo);
+                                spritePatternBitsHi = PpuRead(ppu, spritePatternAddrHi);
+
+                                // Should this sprite be flipped horizontally?
+                                if (ppu->scanlineSprites[i].attribute & 0x40) {
+                                        spritePatternBitsLo = MirrorByte(spritePatternBitsLo);
+                                        spritePatternBitsHi = MirrorByte(spritePatternBitsHi);
+                                }
+
+                                ppu->spriteShifterPatternLo[i] = spritePatternBitsLo;
+                                ppu->spriteShifterPatternHi[i] = spritePatternBitsHi;
+                        }
+                }
         }
 
         if (240 == ppu->scanline) {
@@ -700,7 +840,77 @@ void PpuTick(struct ppu *ppu) {
                 bgPalette = (bgPal1 << 1) | bgPal0;
         }
 
-        struct color *color = PpuGetColorFromPaletteRam(ppu, bgPalette, bgPixel);
+        uint8_t fgPixel = 0x00;
+        uint8_t fgPalette = 0x00;
+        uint8_t fgPriority = 0x00;
+
+        if (ppu->mask.renderSprites) {
+                ppu->isSpriteZeroBeingRendered = false;
+
+                for (int i = 0; i < ppu->spriteCount; i++) {
+                        if (ppu->scanlineSprites[i].x == 0) {
+                                uint8_t fgPixelLo = (ppu->spriteShifterPatternLo[i] & 0x80) > 0;
+                                uint8_t fgPixelHi = (ppu->spriteShifterPatternHi[i] & 0x80) > 0;
+                                fgPixel = (fgPixelHi << 1) | fgPixelLo;
+
+                                fgPalette = (ppu->scanlineSprites[i].attribute & 0x03) + 0x04;
+                                fgPriority = (ppu->scanlineSprites[i].attribute & 0x20) == 0;
+
+                                if (fgPixel != 0) {
+                                        if (i == 0) { // Is this sprite zero?
+                                                ppu->isSpriteZeroBeingRendered = true;
+                                        }
+
+                                        break;
+                                }
+                        }
+                }
+        }
+
+        uint8_t pixel = 0x00;
+        uint8_t palette = 0x00;
+
+        // Bg is transparent AND fg is transparent.
+        if (bgPixel == 0 && fgPixel == 0) {
+                pixel = 0x00;
+                palette = 0x00;
+        }
+        // Bg is transparent, fg is visible.
+        else if (bgPixel == 0 && fgPixel > 0) {
+                pixel = fgPixel;
+                palette = fgPalette;
+        }
+        // Bg is visible, fg is tranparent.
+        else if (bgPixel > 0 && fgPixel == 0) {
+                pixel = bgPixel;
+                palette = bgPalette;
+        }
+        // Bg is visible AND fg is visible.
+        else if (bgPixel > 0 && fgPixel > 0) {
+                if (fgPriority) {
+                        pixel = fgPixel;
+                        palette = fgPalette;
+                } else {
+                        pixel = bgPixel;
+                        palette = bgPalette;
+                }
+
+                if (ppu->isSpriteZeroHitPossible && ppu->isSpriteZeroBeingRendered) {
+                        if (ppu->mask.renderBackground & ppu->mask.renderSprites) {
+                                if (~(ppu->mask.renderBackgroundLeft | ppu->mask.renderSpritesLeft)) {
+                                        if (ppu->cycle >= 9 && ppu->cycle < 258) {
+                                                ppu->status.spriteZeroHit = 1;
+                                        }
+                                } else {
+                                        if (ppu->cycle >= 1 && ppu->cycle < 258) {
+                                                ppu->status.spriteZeroHit = 1;
+                                        }
+                                }
+                        }
+                }
+        }
+
+        struct color *color = PpuGetColorFromPaletteRam(ppu, palette, pixel);
         SpriteSetPixel(ppu->screen, ppu->cycle - 1, ppu->scanline, color->rgba);
 
         ppu->cycle++;
@@ -838,9 +1048,11 @@ void PpuWriteViaCpu(struct ppu *ppu, uint16_t addr, uint8_t data) {
                 break;
 
                 case 0x0003: // OAM Address
+                        ppu->oamAddr = data;
                 break;
 
                 case 0x0004: // OAM Data
+                        PpuGetOam(ppu)[ppu->oamAddr] = data;
                 break;
 
                 case 0x0005: // Scroll
@@ -900,6 +1112,7 @@ uint8_t PpuReadViaCpu(struct ppu *ppu, uint16_t addr, bool readOnly) {
                                 break;
 
                         case 0x0004: // OAM Data
+                                data = PpuGetOam(ppu)[ppu->oamAddr];
                                 break;
 
                         case 0x0005: // Scroll
@@ -997,7 +1210,7 @@ struct sprite *PpuGetPatternTable(struct ppu *ppu, uint8_t i, uint8_t palette) {
                                 // We read 8 bits worth of data, now we iterate
                                 // through each column of the current row.
                                 for (uint16_t col = 0; col < 8; col++) {
-                                        uint8_t pixel = (tileLsb & 0x01) + (tileMsb & 0x01);
+                                        uint8_t pixel = ((tileLsb & 0x01) << 1) | (tileMsb & 0x01);
 
                                         // Shift each byte right one bit so the
                                         // next iteration works on the next
@@ -1069,4 +1282,8 @@ void PpuSetNmi(struct ppu *ppu, uint8_t trueOrFalse) {
 
 struct sprite *PpuGetNameTable(struct ppu *ppu, uint8_t i) {
         return ppu->nameTableSprites[i];
+}
+
+uint8_t *PpuGetOam(struct ppu *ppu) {
+        return (uint8_t *)ppu->oam;
 }

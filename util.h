@@ -4,7 +4,7 @@
 
   File: util.h
   Created: 2019-11-03
-  Updated: 2019-11-21
+  Updated: 2019-12-07
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -52,5 +52,14 @@ SwapGeneric(void *v1, void *v2, size_t size);
 //! \param[in] size size of buf
 void
 HexToString(uint32_t hex, uint8_t nibbles, char *buf, uint8_t size);
+
+//! \brief Mirrors bits left <-> right in a byte.
+//!
+//! eg.: 1100_0001 => 1000_0011
+//!
+//! \param[in] b byte to flip
+//! \return flipped byte
+uint8_t
+MirrorByte(uint8_t b);
 
 #endif // UTIL_VERSION

@@ -4,7 +4,7 @@
 
   File: ppu.h
   Created: 2019-11-03
-  Updated: 2019-12-03
+  Updated: 2019-12-06
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -86,5 +86,8 @@ PpuSetNmi(struct ppu *ppu, uint8_t trueOrFalse);
 
 struct sprite *
 PpuGetNameTable(struct ppu *ppu, uint8_t i);
+
+uint8_t *
+PpuGetOam(struct ppu *ppu);
 
 #endif // PPU_VERSION
