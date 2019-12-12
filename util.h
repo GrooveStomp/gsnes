@@ -4,7 +4,7 @@
 
   File: util.h
   Created: 2019-11-03
-  Updated: 2019-12-07
+  Updated: 2019-12-12
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -23,6 +23,7 @@
 #define NS_AS_MS(x) (x) / 1000000.0 //!< Convert nanoseconds to milliseconds
 #define MS_AS_NS(x) (x) * 1000000.0 //!< Convert milliseconds to nanoseconds
 #define S_AS_NS(x) (x) * 1000000000 //!< Convert seconds to nanoseconds
+#define NS_AS_S(x) (x) / 1000000000 //!< Convert nanoseconds to seconds
 #define HZ_AS_MS(x) (1.0 / (x)) * 1000.0 //!< Convert hertz to milliseconds per frame
 
 #define B_AS_KB(x) (x) * (1.0 / 1024)

@@ -19,6 +19,9 @@
 #include <string.h> // strlen
 #include <stdio.h> // printf
 
+#include <signal.h>
+#include <pthread.h>
+
 #include "bus.h"
 #include "cart.h"
 #include "color.h"
