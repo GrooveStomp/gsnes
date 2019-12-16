@@ -3,8 +3,8 @@
   Copyright (c) 2019 Aaron Oman (GrooveStomp)
 
   File: sound.c
-  Created: 2019-12-12
-  Updated: 2019-12-12
+  Created: 2019-07-07
+  Updated: 2019-12-16
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -19,229 +19,174 @@
 #include <stdio.h> // fprintf
 #include <stdlib.h> //malloc, free
 #include <stdint.h>
-#include <stdbool.h>
-#include <stdatomic.h>
 
-// TODO: Partially done switching from libsoundio to alsa. See: https://github.com/OneLoneCoder/olcPixelGameEngine/blob/master/Extensions/olcPGEX_Sound.h
-// TODO: Next is GetMixerOutput
+#include <soundio/soundio.h>
 
-#define ALSA_PCM_NEW_HW_PARAMS_API
-#include <alsa/asoundlib.h>
-
-#pragma pack(push, 1)
-struct wave_format {
-        uint16_t formatTag;
-        uint16_t channels;
-        uint32_t samplesPerSec;
-        uint32_t avgBytesPerSec;
-        uint16_t blockAlign;
-        uint16_t bitsPerSample;
-        uint16_t size;
-};
-#pragma pack(pop)
-
-struct sample {
-        float *samples;
-        long samplesCount;
-        int channels;
-        bool isValid;
-};
-
-struct sample SampleInit() {
-        struct sample sample;
-        sample.samples = NULL;
-        sample.samplesCount = 0;
-        sample.channels = 0;
-        sample.isValid = false;
-        return sample;
-}
-
-struct active_sample {
-        int sampleId;
-        uint64_t samplePosition;
-        bool isFinished;
-        bool shouldLoop;
-        bool shouldStop;
-};
-
-struct active_sample ActiveSampleInit() {
-        struct active_sample activeSample;
-        activeSample.sampleId = 0;
-        activeSample.samplePosition = 0;
-        activeSample.isFinished = false;
-        activeSample.shouldLoop = false;
-        activeSample.shouldStop = false;
-        return activeSample;
-}
-
-typedef float (*synth_fn)(int, float, float);
-typedef float (*filter_fn)(int, float, float);
+#include "sound.h"
+#include "util.h"
 
 //! Sound state
 struct sound {
-        struct active_sample *activeSamples;
-        int activeSamplesCount;
-        int activeSamplesCapacity;
-        snd_pcm_t *pcm;
-        unsigned int sampleRate;
-        unsigned int channels;
-        unsigned int blockSamples;
-        unsigned short blockMemory;
-        pthread_t thread;
-        atomic_bool isThreadActive;
-        atomic_uint_fast64_t globalElapsedTimeNs;
-        synth_fn synthFn;
-        filter_fn filterFn;
+        struct SoundIo *lib;
+        struct SoundIoDevice *dev;
+        struct SoundIoOutStream *stream;
+
+        sound_synth_fn synthFn;
+        sound_filter_fn filterFn;
 };
 
-void SoundDeinit(struct sound *sound) {
+static struct sound *sound;
+
+void SoundSetSynthFn(sound_synth_fn synthFn) {
+        sound->synthFn = synthFn;
+}
+
+void SoundSetFilterFn(sound_filter_fn filterFn) {
+        sound->filterFn = filterFn;
+}
+
+void SoundStop() {
+        int err;
+        if ((err = soundio_outstream_pause(sound->stream, 1))) {
+                fprintf(stderr, "Unable to stop device: %s\n", soundio_strerror(err));
+        }
+}
+
+void SoundDeinit() {
         if (NULL == sound)
                 return;
 
-        atomic_store(sound->isThreadActive, false);
+        if (NULL != sound)
+                SoundStop(sound);
 
-        int exitStatus = 0; // See call to pthread_exit in thread.
-        int rc = pthread_join(sound->thread, &exitStatus);
-        // Possible rc values:
-        // EDEADLK: Deadlock.
-        // EINVAL: Not a joinable thread.
-        // EINVAL: Another thread is waiting for this thread to join.
-        // ESRCH: Thread ID not found.
+        if (NULL != sound->stream)
+                soundio_outstream_destroy(sound->stream);
 
-        snd_pcm_drain(sound->pcm);
-        snd_pcm_close(sound->pcm);
+        if (NULL != sound->dev)
+                soundio_device_unref(sound->dev);
 
-        if (NULL != sound->activeSamples)
-                free(sound->activeSamples);
+        if (NULL != sound->lib)
+                soundio_destroy(sound->lib);
 
         free(sound);
 }
 
-float Clip(float sample, float max) {
-        if (sample >= 0.0)
-                return fminf(sample, max);
-        else
-                return fmaxf(sample, -max);
-}
-
-static void AudioThreadFunc(*void args) {
-        struct sound *sound = (struct sound *)args;
-        atomic_store(sound->globalElapsedTimeNs, 0);
-
-        static float timeStep = 1.0f / (float)sound->sampleRate;
-
-        // Goofy hack to get maximum integer for a type at run-time
-        short maxSampleShort = (short)pow(2, (sizeof(short) * 8) - 1) - 1;
-        float maxSample = (float)maxSampleShort;
-
-        short previousSample = 0;
-        while (atomic_load(struct->isThreadActive)) {
-                short newSample = 0;
-
-                for (unsigned int n = 0; n < sound->blockSamples; n += sound->channels) {
-                        for (unsigned int c = 0; c < sound->channels; c++) {
-                                uint64_t elapsedNs = atomic_load(sound->globalElapsedTimeNs);
-                                float output = GetMixerOutput(c, NS_AS_S(elapsedNs), timeStep);
-                                newSample = (short)(Clip(output, 1.0) * maxSample);
-                                sound->blockMemory[n + c] = newSample;
-                                previousSample = newSample;
-                        }
-                        uint64_t stepNs = (uint64_t)S_AS_NS(timeStep);
-                        uint64_t elapsedNs = atomic_load(sound->globalElapsedTimeNs);
-                        atomic_store(sound->globalElapsedTimeNs, elapsedNs + stepNs);
-                }
-
-                snd_pcm_uframes_t remaining = sound->blockSamples;
-                short *blockPos = sound->blockMemory;
-                while (remaining > 0) {
-                        int rc = snd_pcm_writei(sound->pcm, blockPos, remaining);
-                        if (rc > 0) {
-                                blockPos += rc * sound->channels;
-                                remaining -= rc;
-                        }
-                        if (rc == -EAGAIN) continue;
-
-                        // buffer underrun, get more data
-                        if (rc == -EPIPE) {
-                                snd_pcm_prepare(sound->pcm);
-                        }
-                }
-        }
-
-        int retval = 0;
-        pthread_exit(retval);
-}
-
-struct sound *SoundInit(unsigned int sampleRate, unsigned int channels, unsigned int blocks, unsigned int blockSamples) {
-        struct sound *sound = (struct sound *)calloc(1, sizeof(struct sound));
-        if (sound == NULL) {
-                fprintf(stderr, "Couldn't allocate sound struct\n");
-                return NULL;
-        }
-
-        atomic_store(sound->isThreadActive, false);
-        sound->sampleRate = sampleRate;
-        sound->channels = channels;
-        sound->blockSamples = blockSamples;
-        sound->blockMemory = NULL;
-        sound->synthFn = NULL;
-        sound->filterFn = NULL;
-
-        int rc = snd_pcm_open(sound->pcm, "default", SND_PCM_STREAM_PLAYBACK, 0);
-        if (rc < 0) {
-                fprintf(stderr, "Couldn't initialize pcm\n");
-                SoundDeinit(sound);
-                return NULL;
-        }
-
-        snd_pcm_hw_params_t *params;
-        snd_pcm_hw_params_alloca(&params);
-        snd_pcm_hw_params_any(sound->pcm, params);
-
-        snd_pcm_hw_params_set_format(sound->pcm, params, SND_PCM_FORMAT_S16_LE);
-        snd_pcm_hw_params_set_rate(sound->pcm, params, sound->sampleRate, 0);
-        snd_pcm_hw_params_set_channels(sound->pcm, params, sound->channels);
-        snd_pcm_hw_params_set_period_size(sound->pcm, params, sound->blockSamples, 0);
-        snd_pcm_hw_params_set_periods(sound->pcm, params, blocks, 0);
-
-        rc = snd_pcm_hw_params(sound->pcm, params);
-        if (rc < 0) {
-                fprintf(stderr, "Couldn't configure pcm device\n");
-                SoundDeinit(sound);
-                return NULL;
-        }
-
-        sound->activeSamples = calloc(1, sizeof(struct active_sample));
-        if (sound->activeSamples == NULL) {
-                fprintf(stderr, "Couldn't allocate active samples memory\n");
-                SoundDeinit(sound);
-                return NULL;
-        }
-        sound->activeSamplesCount = 0;
-        sound->activeSamplesCapacity = 1;
-
-        sound->blockMemory = (short *)calloc(sound->blockSamples, sizeof(short));
-        if (sound->blockMemory == NULL) {
-                fprintf(stderr, "Couldn't allocate block memory\n");
-                SoundDeinit(sound);
-                return NULL;
-        }
-
-        snd_pcm_start(sound->pcm);
-        for (unsigned int i = 0; i < blocks; i++) {
-                rc = snd_pcm_writei(sound->pcm, sound->blockMemory, 512);
-                // TODO: What about result rc there?
-        }
-
-        snd_pcm_start(sound->pcm);
-        atomic_store(sound->isThreadActive, true);
-
+static void WriteCallback(struct SoundIoOutStream *out, int frameCountMin, int frameCountMax) {
+        const struct SoundIoChannelLayout *layout = &out->layout;
+        float sampleRate = out->sample_rate;
+        float secondsPerFrame = 1.0f / sampleRate;
+        struct SoundIoChannelArea *areas;
+        int framesLeft = frameCountMax;
         int err;
-        if (0 != (err = pthread_create(sound->thread, NULL, AudioThreadFunc, &sound))) {
-                fprintf(stderr, "Couldn't create sound thread: errno(%d)\n", err);
-                SoundDeinit(sound);
+
+        static float secondsOffset = 0.0f;
+
+        while (framesLeft > 0) {
+                int frameCount = framesLeft;
+
+                if ((err = soundio_outstream_begin_write(out, &areas, &frameCount))) {
+                        fprintf(stderr, "%s\n", soundio_strerror(err));
+                        fprintf(stderr, "TODO: AARON: Improve exit here");
+                        exit(1);
+                }
+
+                if (!frameCount)
+                        break;
+
+                for (int frame = 0; frame < frameCount; frame++) {
+                        for (int channel = 0; channel < layout->channel_count; channel++) {
+                                float *ptr = (float*)(areas[channel].ptr + areas[channel].step * frame);
+
+                                float secondsElapsed = secondsOffset + ((float)frame * secondsPerFrame);
+                                float sample = 0;
+                                if (sound->synthFn != NULL) {
+                                        sample = sound->synthFn(channel, secondsElapsed, secondsPerFrame);
+                                }
+                                if (sound->filterFn != NULL) {
+                                        sample = sound->filterFn(channel, secondsElapsed, sample);
+                                }
+
+                                *ptr = sample;
+                        }
+                }
+                secondsOffset = fmod(secondsOffset + secondsPerFrame * frameCount, 1.0);
+
+                if ((err = soundio_outstream_end_write(out))) {
+                        fprintf(stderr, "%s\n", soundio_strerror(err));
+                        exit(1);
+                }
+
+                framesLeft -= frameCount;
+        }
+}
+
+void SoundPlay() {
+        int err;
+        if ((err = soundio_outstream_pause(sound->stream, 0))) {
+                fprintf(stderr, "Unable to start device: %s\n", soundio_strerror(err));
+        }
+}
+
+struct sound *SoundInit(unsigned int sampleRate, int numChannels) {
+        int err;
+
+        sound = (struct sound *)malloc(sizeof(struct sound));
+        memset(sound, 0, sizeof(struct sound));
+
+        sound->lib = soundio_create();
+        if (!sound->lib) {
+                fprintf(stderr, "Couldn't initialize soundio\n");
                 return NULL;
         }
+
+        if ((err = soundio_connect(sound->lib))) {
+                fprintf(stderr, "Error connecting to soundio: %s\n", soundio_strerror(err));
+                SoundDeinit();
+                return NULL;
+        }
+        soundio_flush_events(sound->lib);
+
+        int defaultOutDevIndex = soundio_default_output_device_index(sound->lib);
+        if (defaultOutDevIndex < 0) {
+                fprintf(stderr, "No output device found\n");
+                SoundDeinit();
+                return NULL;
+        }
+
+        sound->dev = soundio_get_output_device(sound->lib, defaultOutDevIndex);
+        if (!sound->dev) {
+                fprintf(stderr, "Out of memory\n");
+                SoundDeinit();
+                return NULL;
+        }
+        fprintf(stdout, "Output device: %s\n", sound->dev->name);
+
+        sound->stream = soundio_outstream_create(sound->dev);
+        if (!sound->stream) {
+                fprintf(stderr, "Couldn't create outstream device\n");
+                SoundDeinit();
+                return NULL;
+        }
+        sound->stream->format = SoundIoFormatFloat32NE;
+        sound->stream->sample_rate = sampleRate;
+        sound->stream->write_callback = WriteCallback;
+
+        if ((err = soundio_outstream_open(sound->stream))) {
+                fprintf(stderr, "Unable to open device: %s", soundio_strerror(err));
+                SoundDeinit();
+                return NULL;
+        }
+
+        if (sound->stream->layout_error)
+                fprintf(stderr, "Unable to set channel layout: %s\n", soundio_strerror(err));
+
+        if ((err = soundio_outstream_start(sound->stream))) {
+                fprintf(stderr, "Unable to start device: %s\n", soundio_strerror(err));
+                SoundDeinit();
+                return NULL;
+        }
+
+        SoundStop(sound);
 
         return sound;
 }

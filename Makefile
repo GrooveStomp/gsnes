@@ -1,14 +1,15 @@
 #******************************************************************************
 # File: Makefile
 # Created: 2019-10-16
-# Updated: 2019-12-03
-# Copyright (c) 2019 Aaron Oman (GrooveStomp)
-# Notice: Creative Commons Attribution 4.0 International License (CC-BY 4.0)
+# Updated: 2019-12-15
+# Copyright (c) 2019 Aaron Oman (GrooveStomp) CC-BY 4.0
+# Creative Commons Attribution 4.0 International License
+# https://creativecommons.org/licenses/by/4.0/
 #******************************************************************************
 CC       = /usr/bin/gcc
 INC     += $(shell sdl2-config --cflags)
 HEADERS  = $(wildcard *.h) $(wildcard external/*.h)
-LIBS    += $(shell sdl2-config --libs) -lSDL2main -lm
+LIBS    += $(shell sdl2-config --libs) -lSDL2main -lm -lsoundio
 CFLAGS  += -std=c11 -pedantic -Wall -D_GNU_SOURCE
 
 SRC_DEP  =

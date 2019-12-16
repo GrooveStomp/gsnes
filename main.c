@@ -4,7 +4,7 @@
 
   File: main.c
   Created: 2019-10-31
-  Updated: 2019-12-06
+  Updated: 2019-12-16
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -14,12 +14,12 @@
   conditions; See LICENSE for details.
  ******************************************************************************/
 //! \file main.c
-#include <time.h> // struct timespec, clock_gettime
+#include <math.h> // sin
+#include <stdio.h> // printf
 #include <stdlib.h> // strtoul, exit
 #include <string.h> // strlen
-#include <stdio.h> // printf
+#include <time.h> // struct timespec, clock_gettime
 
-#include <signal.h>
 #include <pthread.h>
 
 #include "bus.h"
@@ -29,6 +29,7 @@
 #include "graphics.h"
 #include "input.h"
 #include "ppu.h"
+#include "sound.h"
 #include "util.h"
 
 static const int FONT_HEADER_SCALE = 20;
@@ -46,7 +47,10 @@ static struct bus *bus = NULL;
 static struct input *input = NULL;
 static struct graphics *graphics = NULL;
 static struct cart *cart = NULL;
+static struct sound *sound = NULL;
 static char *font_buffer = NULL;
+
+float SynthFn(int numChannels, float timeElapsedS, float timeStemp);
 
 void Deinit(int code) {
         if (NULL != font_buffer)
@@ -63,6 +67,9 @@ void Deinit(int code) {
                 CpuDeinit(cpu);
         if (NULL != cart)
                 CartDeinit(cart);
+
+        if (NULL != sound)
+                SoundDeinit(sound);
 
         exit(code);
 }
@@ -116,6 +123,13 @@ void Init() {
                 fclose(ttf_file);
                 Deinit(1);
         }
+
+        sound = SoundInit(44100, 1);
+        if (NULL == sound) {
+                fprintf(stderr, "Couldn't initialize sound");
+                Deinit(1);
+        }
+        SoundSetSynthFn(SynthFn);
 
         fseek(ttf_file, 0, SEEK_END);
         size_t fsize = ftell(ttf_file);
@@ -191,6 +205,7 @@ int main(int argc, char **argv) {
         int isEmulating = 1;
         int isRunning = 1;
         int selectedPalette = 0;
+        int soundPlaying = 0;
         while (isRunning) {
                 clock_gettime(CLOCK_REALTIME, &frameEnd);
                 double elapsedTime = S_AS_MS(frameEnd.tv_sec - frameStart.tv_sec);
@@ -218,6 +233,14 @@ int main(int argc, char **argv) {
                 if (InputGetKey(input, KEY_P).pressed) {
                         ++selectedPalette;
                         selectedPalette &= 0x07;
+                }
+                if (InputGetKey(input, KEY_M).pressed) {
+                        soundPlaying = !soundPlaying;
+                        if (soundPlaying) {
+                                SoundStop();
+                        } else {
+                                SoundPlay();
+                        }
                 }
 
                 if (isEmulating) {
@@ -288,4 +311,28 @@ int main(int argc, char **argv) {
 
         Deinit(0);
         return 0;
+}
+
+float SquareWave(float frequency, float seconds) {
+        static float numHarmonics = 20;
+        static float dutyCycle = 0.5f;
+
+        float a = 0;
+        float b = 0;
+        float phaseDiff = dutyCycle * 2.0f * 3.14159f;
+
+        for (float n = 1; n < numHarmonics; n++) {
+                float c = n * frequency * 2.0 * 3.14159f * seconds;
+                a += sin(c) / n;
+                b += sin(c - phaseDiff * n) / n;
+        }
+
+        return (2.0 / 3.14159f) * (a - b);
+}
+
+float SynthFn(int channel, float timeElapsedS, float timeStepS) {
+        static float frequency = 440.0f;
+
+        //return sin(timeElapsedS * 440.0f * 2.0f * 3.14159f);
+        return 0.5f * SquareWave(frequency, timeElapsedS);
 }
