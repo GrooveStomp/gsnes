@@ -4,7 +4,7 @@
 
   File: bus.c
   Created: 2019-10-16
-  Updated: 2019-12-07
+  Updated: 2019-12-17
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -17,6 +17,7 @@
 #include <stdlib.h> // calloc, free
 #include <stdbool.h>
 
+#include "apu.h"
 #include "bus.h"
 #include "cpu.h"
 #include "ppu.h"
@@ -24,6 +25,7 @@
 #include "util.h"
 
 struct bus {
+        struct apu *apu;
         struct cpu *cpu;
         struct ppu *ppu;
         struct cart *cart;
@@ -38,7 +40,7 @@ struct bus {
         bool dmaDummy;
 };
 
-struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
+struct bus *BusInit(struct apu *apu, struct cpu *cpu, struct ppu *ppu) {
         struct bus *bus = (struct bus *)calloc(1, sizeof(struct bus));
         if (NULL == bus)
                 return NULL;
@@ -49,6 +51,7 @@ struct bus *BusInit(struct cpu *cpu, struct ppu *ppu) {
                 return NULL;
         }
 
+        bus->apu = apu;
         bus->cpu = cpu;
         bus->ppu = ppu;
         bus->controllerSnapshot[0] = 0x00;
@@ -82,6 +85,9 @@ void BusWrite(struct bus *bus, uint16_t addr, uint8_t data) {
                 bus->cpuRam[addr & 0x07FF] = data;
         } else if (addr >= 0x2000 && addr <= 0x3FFF) {
                 PpuWriteViaCpu(bus->ppu, addr & 0x0007, data);
+        } else if ((addr >= 0x4000 && addr <= 0x4013) || addr == 0x4015 || addr == 0x4017) {
+                // NES APU
+                ApuWrite(bus->apu, addr, data);
         } else if (addr == 0x4014) {
                 bus->dmaPage = data;
                 bus->dmaAddr = 0x00;
@@ -124,6 +130,8 @@ void BusReset(struct bus *bus) {
 
 void BusTick(struct bus *bus) {
         PpuTick(bus->ppu);
+
+        ApuTick(bus->apu);
 
         if (bus->tickCount % 3 == 0) {
                 if (bus->dmaTransfer) {

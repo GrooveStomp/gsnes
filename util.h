@@ -4,7 +4,7 @@
 
   File: util.h
   Created: 2019-11-03
-  Updated: 2019-12-12
+  Updated: 2019-12-17
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -56,11 +56,20 @@ HexToString(uint32_t hex, uint8_t nibbles, char *buf, uint8_t size);
 
 //! \brief Mirrors bits left <-> right in a byte.
 //!
-//! eg.: 1100_0001 => 1000_0011
+//! eg.: 0110_0001 => 1000_0110
 //!
 //! \param[in] b byte to flip
 //! \return flipped byte
 uint8_t
 MirrorByte(uint8_t b);
+
+//! \brief Rotates bits right in a byte.
+//!
+//! eg.: 0110_0001 => 1011_0000
+//!
+//! \param[in] b byte to rotate
+//! \return rotated word
+uint8_t
+RotateRightByte(uint8_t b);
 
 #endif // UTIL_VERSION

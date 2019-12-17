@@ -19,9 +19,11 @@
 #include <stdlib.h> // strtoul, exit
 #include <string.h> // strlen
 #include <time.h> // struct timespec, clock_gettime
-
 #include <pthread.h>
 
+#include "external/lfqueue.h"
+
+#include "apu.h"
 #include "bus.h"
 #include "cart.h"
 #include "color.h"
@@ -41,6 +43,7 @@ static const int WIDTH = NES_SCREEN_WIDTH + 250;
 static const int HEIGHT = NES_SCREEN_HEIGHT;
 static const int SWATCH_SIZE = 5;
 
+static struct apu *apu = NULL;
 static struct cpu *cpu = NULL;
 static struct ppu *ppu = NULL;
 static struct bus *bus = NULL;
@@ -49,6 +52,8 @@ static struct graphics *graphics = NULL;
 static struct cart *cart = NULL;
 static struct sound *sound = NULL;
 static char *font_buffer = NULL;
+
+static lfqueue_t audioBuffer;
 
 float SynthFn(int numChannels, float timeElapsedS, float timeStemp);
 
@@ -67,9 +72,12 @@ void Deinit(int code) {
                 CpuDeinit(cpu);
         if (NULL != cart)
                 CartDeinit(cart);
-
+        if (NULL != apu)
+                ApuDeinit(apu);
         if (NULL != sound)
                 SoundDeinit(sound);
+
+        lfqueue_destroy(&audioBuffer);
 
         exit(code);
 }
@@ -86,6 +94,11 @@ void Init() {
                 fprintf(stderr, "Couldn't load cart");
                 Deinit(1);
         }
+        apu = ApuInit();
+        if (NULL == apu) {
+                fprintf(stderr, "Couldn't initialize apu");
+                Deinit(1);
+        }
 
         cpu = CpuInit();
         if (NULL == cpu) {
@@ -99,7 +112,7 @@ void Init() {
                 Deinit(1);
         }
 
-        bus = BusInit(cpu, ppu);
+        bus = BusInit(apu, cpu, ppu);
         if (NULL == bus) {
                 fprintf(stderr, "Couldn't initialize bus");
                 Deinit(1);
@@ -149,6 +162,11 @@ void Init() {
         }
         fclose(ttf_file);
         GraphicsInitText(graphics, (unsigned char *)font_buffer);
+
+        if (lfqueue_init(&audioBuffer) == -1) {
+                fprintf(stderr, "Couldn't initialize audio buffer");
+                Deinit(1);
+        }
 }
 
 void DrawCpuState(int x, int y) {
@@ -248,7 +266,14 @@ int main(int argc, char **argv) {
                                 residualTime -= elapsedTime;
                         } else {
                                 residualTime += (1.0 / 60.0) - elapsedTime;
-                                do { BusTick(bus); } while (!PpuIsFrameComplete(ppu));
+                                do {
+                                        BusTick(bus);
+                                        if (ApuDidLastTickProduceSample(apu)) {
+                                                float sample = ApuGetOutputSample(apu);
+                                                // NOTE: This returns -1 if enqueue fails.
+                                                lfqueue_enq(&audioBuffer, &sample);
+                                        }
+                                } while (!PpuIsFrameComplete(ppu));
                                 PpuResetFrameCompletion(ppu);
                         }
                 } else {
@@ -331,8 +356,11 @@ float SquareWave(float frequency, float seconds) {
 }
 
 float SynthFn(int channel, float timeElapsedS, float timeStepS) {
-        static float frequency = 440.0f;
+        //static float frequency = 440.0f;
 
+        // NOTE: Returns NULL if empty or failure.
+        float *sample = lfqueue_deq(&audioBuffer);
+        return *sample;
         //return sin(timeElapsedS * 440.0f * 2.0f * 3.14159f);
-        return 0.5f * SquareWave(frequency, timeElapsedS);
+        // return 0.5f * SquareWave(frequency, timeElapsedS);
 }

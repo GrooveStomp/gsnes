@@ -4,7 +4,7 @@
 
   File: util.c
   Created: 2019-11-15
-  Updated: 2019-12-07
+  Updated: 2019-12-17
   Author: Aaron Oman
   Notice: GNU AGPLv3 License
 
@@ -43,4 +43,8 @@ uint8_t MirrorByte(uint8_t b) {
         b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
         b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
         return b;
+}
+
+uint8_t RotateRightByte(uint8_t b) {
+        return ((b & 0x01) << 7) | ((b & 0xFE) >> 1);
 }

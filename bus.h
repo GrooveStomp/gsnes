@@ -20,17 +20,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-struct cpu;
+struct apu;
 struct bus;
-struct ppu;
 struct cart;
+struct cpu;
+struct ppu;
 
 struct controller {
         uint8_t input;
 };
 
 struct bus *
-BusInit(struct cpu *cpu, struct ppu *ppu);
+BusInit(struct apu *apu, struct cpu *cpu, struct ppu *ppu);
 
 void
 BusDeinit(struct bus *bus);
