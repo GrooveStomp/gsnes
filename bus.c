@@ -79,7 +79,7 @@ void BusDeinit(struct bus *bus) {
 
 void BusWrite(struct bus *bus, uint16_t addr, uint8_t data) {
         if (CartCpuWrite(bus->cart, addr, data)) {
-
+                // NOP
         } else if (addr >= 0x0000 && addr <= 0x1FFF) {
                 // System RAM address range, mirrored every 2048.
                 bus->cpuRam[addr & 0x07FF] = data;
@@ -130,33 +130,36 @@ void BusReset(struct bus *bus) {
 
 void BusTick(struct bus *bus) {
         PpuTick(bus->ppu);
-
         ApuTick(bus->apu);
 
-        if (bus->tickCount % 3 == 0) {
-                if (bus->dmaTransfer) {
-                        if (bus->dmaDummy) {
-                                if (bus->tickCount % 2 == 1) {
-                                        bus->dmaDummy = false;
-                                }
-                        } else {
-                                if (bus->tickCount % 2 == 0) {
-                                        bus->dmaData = BusRead(bus, bus->dmaPage << 8 | bus->dmaAddr, false);
-                                } else {
-                                        PpuGetOam(bus->ppu)[bus->dmaAddr] = bus->dmaData;
-                                        bus->dmaAddr++;
-
-                                        if (bus->dmaAddr == 0x00) {
-                                                bus->dmaTransfer = false;
-                                                bus->dmaDummy = true;
-                                        }
-                                }
-                        }
-                } else {
-                        CpuTick(bus->cpu);
-                }
+        if (bus->tickCount % 3 != 0) {
+                goto resume_tick;
         }
 
+        if (!bus->dmaTransfer) {
+                CpuTick(bus->cpu);
+                goto resume_tick;
+        }
+
+        if (bus->dmaDummy && (bus->tickCount % 2) == 1) {
+                bus->dmaDummy = false;
+                goto resume_tick;
+        }
+
+        if (bus->tickCount % 2 == 0) {
+                bus->dmaData = BusRead(bus, bus->dmaPage << 8 | bus->dmaAddr, false);
+                goto resume_tick;
+        }
+
+        PpuGetOam(bus->ppu)[bus->dmaAddr] = bus->dmaData;
+        bus->dmaAddr++;
+
+        if (bus->dmaAddr == 0x00) {
+                bus->dmaTransfer = false;
+                bus->dmaDummy = true;
+        }
+
+resume_tick:
         if (PpuGetNmi(bus->ppu)) {
                 PpuSetNmi(bus->ppu, false);
                 CpuNmi(bus->cpu);

@@ -55,7 +55,7 @@ static char *font_buffer = NULL;
 
 static lfqueue_t audioBuffer;
 
-float SynthFn(int numChannels, float timeElapsedS, float timeStemp);
+float *SynthFn(int numChannels, float timeElapsedS, float timeStemp);
 
 void Deinit(int code) {
         if (NULL != font_buffer)
@@ -85,7 +85,7 @@ void Deinit(int code) {
 void Init() {
         char *ttf_filename = "/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf";
 
-        cart = CartInit("super_mario_bros.nes");
+        cart = CartInit("donkey_kong.nes");
         if (NULL == cart) {
                 fprintf(stderr, "Couldn't load cart");
                 Deinit(1);
@@ -223,12 +223,13 @@ int main(int argc, char **argv) {
         int isEmulating = 1;
         int isRunning = 1;
         int selectedPalette = 0;
-        int soundPlaying = 0;
+        int soundPlaying = 1;
         while (isRunning) {
                 clock_gettime(CLOCK_REALTIME, &frameEnd);
                 double elapsedTime = S_AS_MS(frameEnd.tv_sec - frameStart.tv_sec);
                 elapsedTime += NS_AS_MS(frameEnd.tv_nsec - frameStart.tv_nsec);
 
+                SoundPlay();
                 GraphicsBegin(graphics);
                 GraphicsClearScreen(graphics, 0xFFFFFFFF);
 
@@ -246,7 +247,14 @@ int main(int argc, char **argv) {
                 controllers[0].input |= InputGetKey(input, KEY_LEFT).held ? 0x02 : 0x00;
                 controllers[0].input |= InputGetKey(input, KEY_RIGHT).held ? 0x01 : 0x00;
 
-                if (InputGetKey(input, KEY_SPACE).pressed) isEmulating = !isEmulating;
+                if (InputGetKey(input, KEY_SPACE).pressed) {
+                        isEmulating = !isEmulating;
+                        if (isEmulating) {
+                                SoundPlay();
+                        } else {
+                                SoundStop();
+                        }
+                }
                 if (InputGetKey(input, KEY_R).pressed) BusReset(bus);
                 if (InputGetKey(input, KEY_P).pressed) {
                         ++selectedPalette;
@@ -255,9 +263,9 @@ int main(int argc, char **argv) {
                 if (InputGetKey(input, KEY_M).pressed) {
                         soundPlaying = !soundPlaying;
                         if (soundPlaying) {
-                                SoundStop();
-                        } else {
                                 SoundPlay();
+                        } else {
+                                SoundStop();
                         }
                 }
 
@@ -269,9 +277,17 @@ int main(int argc, char **argv) {
                                 do {
                                         BusTick(bus);
                                         if (ApuDidLastTickProduceSample(apu)) {
-                                                float sample = ApuGetOutputSample(apu);
-                                                // NOTE: This returns -1 if enqueue fails.
-                                                lfqueue_enq(&audioBuffer, &sample);
+                                                float *sample = (float *)malloc(sizeof(float));
+                                                if (sample == NULL) {
+                                                        fprintf(stderr, "Couldn't allocate sample\n");
+                                                        continue;
+                                                }
+                                                *sample = ApuGetOutputSample(apu);
+
+                                                int rc = lfqueue_enq(&audioBuffer, sample);
+                                                if (rc == -1) {
+                                                        fprintf(stderr, "Couldn't enqueue audio sample\n");
+                                                }
                                         }
                                 } while (!PpuIsFrameComplete(ppu));
                                 PpuResetFrameCompletion(ppu);
@@ -279,6 +295,7 @@ int main(int argc, char **argv) {
                 } else {
                         // Emulate code step-by-step.
                         if (InputGetKey(input, KEY_C).pressed) {
+                                SoundPlay();
                                 // Tick enough times to execute a whole CPU instruction.
                                 do { BusTick(bus); } while (!CpuIsComplete(cpu));
 
@@ -286,17 +303,19 @@ int main(int argc, char **argv) {
                                 // so it may be incomplete for additional system
                                 // clock cycles. Drain those out.
                                 do { BusTick(bus); } while (CpuIsComplete(cpu));
+                                SoundStop();
                         }
 
                         // Emulate one whole frame.
                         if (InputGetKey(input, KEY_F).pressed) {
+                                SoundPlay();
                                 // Clock enough times to draw a single frame.
                                 do { BusTick(bus); } while (!PpuIsFrameComplete(ppu));
 
                                 // Use residual clock cycles to complete the
                                 // current instruction.
                                 do { BusTick(bus); } while (!CpuIsComplete(cpu));
-
+                                SoundStop();
                                 // Reset frame completion flag.
                                 PpuResetFrameCompletion(ppu);
                         }
@@ -355,12 +374,14 @@ float SquareWave(float frequency, float seconds) {
         return (2.0 / 3.14159f) * (a - b);
 }
 
-float SynthFn(int channel, float timeElapsedS, float timeStepS) {
-        //static float frequency = 440.0f;
+float *SynthFn(int channel, float timeElapsedS, float timeStepS) {
+        /* static float frequency = 440.0f; */
+        /* //return sin(timeElapsedS * 440.0f * 2.0f * 3.14159f); */
+        /* static float sample = 0.0f; */
+        /* sample = 0.5f * SquareWave(frequency, timeElapsedS); */
+        /* return &sample; */
+        /* //static float sample = 0.0f; */
 
-        // NOTE: Returns NULL if empty or failure.
         float *sample = lfqueue_deq(&audioBuffer);
-        return *sample;
-        //return sin(timeElapsedS * 440.0f * 2.0f * 3.14159f);
-        // return 0.5f * SquareWave(frequency, timeElapsedS);
+        return sample;
 }

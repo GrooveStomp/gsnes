@@ -73,7 +73,7 @@ void ApuDeinit(struct apu *apu) {
 void ApuWrite(struct apu *apu, uint16_t addr, uint8_t data) {
         switch (addr) {
                 case 0x4000:
-                        switch ((data & 0xC) >> 6) {
+                        switch ((data & 0xC0) >> 6) {
                                 case 0x00:
                                         apu->pulse1Seq.sequence = 0x0001; // 1/8: 00000001
                                         break;
@@ -84,7 +84,7 @@ void ApuWrite(struct apu *apu, uint16_t addr, uint8_t data) {
                                         apu->pulse1Seq.sequence = 0x000F; // 1/2: 00001111
                                         break;
                                 case 0x03:
-                                        apu->pulse1Seq.sequence = 0x00F4; // 3/4: 11111100
+                                        apu->pulse1Seq.sequence = 0x00FC; // 3/4: 11111100
                                         break;
                         }
                         break;
@@ -93,11 +93,12 @@ void ApuWrite(struct apu *apu, uint16_t addr, uint8_t data) {
                         break;
 
                 case 0x4002:
-                        apu->pulse1Seq.reload = (uint16_t)((data & 0x07)) << 8 | (apu->pulse1Seq.reload & 0x00FF);
-                        apu->pulse1Seq.timer = apu->pulse1Seq.reload;
+                        apu->pulse1Seq.reload = (apu->pulse1Seq.reload & 0xFF00) | data;
                         break;
 
                 case 0x4003:
+                        apu->pulse1Seq.reload = (uint16_t)((data & 0x07)) << 8 | (apu->pulse1Seq.reload & 0x00FF);
+                        apu->pulse1Seq.timer = apu->pulse1Seq.reload;
                         break;
 
                 case 0x4004:
@@ -135,9 +136,10 @@ uint8_t ApuRead(struct apu *apu, uint16_t addr) {
 }
 
 void Pulse1Sequence(uint32_t *sequence) {
-        uint32_t in = *sequence;
-        uint8_t rotated = RotateRightByte((uint8_t)in);
-        *sequence = (uint32_t)rotated;
+        uint32_t s = *sequence;
+        //uint8_t rotated = RotateRightByte((uint8_t)(in & 0x000000FF));
+        uint32_t r = ((s & 0x0001) << 7 || ((s & 0x00FE) >> 1));
+        *sequence = r;
 }
 
 void ApuTick(struct apu *apu) {
@@ -177,6 +179,7 @@ void ApuTick(struct apu *apu) {
                 }
 
                 SeqTick(&apu->pulse1Seq, apu->pulse1Enable, Pulse1Sequence);
+                apu->pulse1Sample = (double)apu->pulse1Seq.output;
                 apu->didLastTickProduceSample = true;
         }
 

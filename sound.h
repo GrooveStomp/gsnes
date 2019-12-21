@@ -22,7 +22,7 @@
 #ifndef SOUND_VERSION
 #define SOUND_VERSION "0.1.0-gsnes"
 
-typedef float (*sound_synth_fn)(int channel, float timeElapsedS, float timeStepS);
+typedef float *(*sound_synth_fn)(int channel, float timeElapsedS, float timeStepS);
 typedef float (*sound_filter_fn)(int channel, float timeElapsedS, float sample);
 
 struct sound;
@@ -51,6 +51,6 @@ void
 SoundSetSynthFn(sound_synth_fn synthFn);
 
 void
-SoundSetSynthFn(sound_filter_fn filterFn);
+SoundSetFilterFn(sound_filter_fn filterFn);
 
 #endif // SOUND_VERSION

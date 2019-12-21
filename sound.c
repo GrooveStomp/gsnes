@@ -98,15 +98,19 @@ static void WriteCallback(struct SoundIoOutStream *out, int frameCountMin, int f
                                 float *ptr = (float*)(areas[channel].ptr + areas[channel].step * frame);
 
                                 float secondsElapsed = secondsOffset + ((float)frame * secondsPerFrame);
-                                float sample = 0;
+                                float *sample = NULL;
                                 if (sound->synthFn != NULL) {
                                         sample = sound->synthFn(channel, secondsElapsed, secondsPerFrame);
                                 }
                                 if (sound->filterFn != NULL) {
-                                        sample = sound->filterFn(channel, secondsElapsed, sample);
+                                        *sample = sound->filterFn(channel, secondsElapsed, *sample);
                                 }
 
-                                *ptr = sample;
+                                if (sample == NULL) {
+                                        *ptr = 0;
+                                } else {
+                                        *ptr = *sample;
+                                }
                         }
                 }
                 secondsOffset = fmod(secondsOffset + secondsPerFrame * frameCount, 1.0);
@@ -159,7 +163,6 @@ struct sound *SoundInit(unsigned int sampleRate, int numChannels) {
                 SoundDeinit();
                 return NULL;
         }
-        fprintf(stdout, "Output device: %s\n", sound->dev->name);
 
         sound->stream = soundio_outstream_create(sound->dev);
         if (!sound->stream) {
